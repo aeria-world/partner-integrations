@@ -1,0 +1,695 @@
+openapi: 3.0.0
+info:
+  version: v1
+  title: External Parking Integration API's
+  description: "Can integrate any 3rd party parking solution with our system. We will send the partner id and a secret key to partners to validate each API call.
+    <br/>Parking Operations:- Realtime call to Aeria for vehicle movements and operability status update
+    <br/>Webhook Operations:- Parking and Pass configuration for parking partner
+    <br/>Full Integration steps at <a href='https://github.com/aeria-world/partner-integrations/blob/main/parking/README.md'>Documentation</a>"
+tags: 
+  - name: Parking Operations
+    description: APIs For Parking Operations
+  - name: Webhook Operations
+    description: APIs For Webhook Operations
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Enter JWT token
+  schemas:
+    Vehicle:
+      type: object
+      properties:
+        vehicleNo:
+          type: string
+          example: MH01AB1234
+        vehicleType:
+          type: string
+          example: 4w
+          anyOf:
+            - type: string
+              enum: [ 4w, 2w ]
+        vehicleColor:
+          type: string
+          example: red
+          nullable: true
+        fastagNo:
+          type: string
+          example: 12345
+          nullable: true
+    
+security: 
+  - BearerAuth: []
+  
+paths:
+  /parking/v1/parking/:parkingId/mark-entry:
+    post:
+      tags: 
+        - Parking Operations
+      summary: Api for marking entry of a vehicle
+      description: Api for marking entry at parking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                passId:
+                  type: string
+                  example: pass0001-0000-0000-0000-000000000000=
+                vehicleNo:
+                  type: string
+                  example: DL01AA0007
+                entryTime:
+                  type: string
+                  example: 2024-01-01T12:00:00.000
+              required:
+                - vehicleNo
+                - entryTime
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+                  data:
+                    type: object
+                    example:
+                      passId : pass0001-0000-0000-0000-000000000000
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+                    
+  /parking/v1/external/:parkingId/mark-exit:
+    post:
+      tags: 
+        - Parking Operations
+      summary: Api for marking exit of a vehicle
+      description: Api for marking exit at parking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                passId:
+                  type: string
+                  example: pass0001-0000-0000-0000-000000000000
+                vehicleNo:
+                  type: string
+                  example: DL01AA0007
+                exitTime:
+                  type: string
+                  example: 2024-01-01T14:59:00.000
+                fareCollected:
+                  type: number
+                  default: 120
+                remarks:
+                  type: string
+                  example: 
+              required:
+                - parkingId
+                - vehicleNo
+                - exitTime
+                - fareCollected
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+                  data:
+                    type: object
+                    example:
+                      passId : string
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+                    
+  /parking/v1/partner/setup/webhook:
+    patch:
+      tags: 
+        - Parking Operations
+      summary: Api for setting up the parking
+      description: Api for setting up the parking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                addParkingUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/parking/create
+                updateParkingUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/parking/update
+                removeParkingUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/parking/remove
+                addPassUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/pass/create
+                editPassUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/pass/edit
+                revokePassUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/pass/revoke
+                setPricingUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/parking/pricing
+                setVehicleInfoUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/parking/vehicleInfo
+                deleteVehicleInfoUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/parking/vehicleInfo/delete
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+                    
+  /<webhook:addParkingUrl>:
+    post:
+      tags: 
+        - Webhook Operations
+      summary: External webhook for add parking url
+      description: External webhook for add parking url
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                parkingId:
+                  type: string
+                  example: parking1-0000-0000-0000-000000000000
+                name:
+                  type: string
+                  example: Tower 1 Basement
+                propertyName:
+                  type: string
+                  example: DLF Cyber City
+                cityName:
+                  type: string
+                  example: Gurugram
+                coordinates:
+                  type: string
+                  example: 12.6473,72.6484
+                status:
+                  type: string
+                  example: active
+              required:
+                - id
+                - name
+                - propertyName
+                - cityName
+                - coordinates
+                - status
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+  
+  /<webhook:updateParkingUrl>:
+    post:
+      tags: 
+        - Webhook Operations
+      summary: External webhook for update parking url
+      description: External webhook for update parking url
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                parkingId:
+                  type: string
+                  example: parking1-0000-0000-0000-000000000000
+                name:
+                  type: string
+                  example: Tower 1 Podium
+                status:
+                  type: string
+                  example: active
+              required:
+                - parkingId
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+                    
+  /<webhook:removeParkingUrl>:
+    post:
+      tags: 
+        - Webhook Operations
+      summary: External webhook for update parking url
+      description: External webhook for update parking url
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                parkingId:
+                  type: string
+                  example: parking1-0000-0000-0000-000000000000
+              required:
+                - parkingId
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+  
+  /<webhook:addPassUrl>:
+    post:
+      tags: 
+        - Webhook Operations
+      summary: External webhook for adding pass url
+      description: External webhook for adding pass url
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                passId:
+                  type: string
+                  example: pass0001-0000-0000-0000-000000000000
+                vehicle:
+                  $ref: '#/components/schemas/Vehicle'
+                parkingId:
+                  type: string
+                  example: parking1-0000-0000-0000-000000000000
+                entryType:
+                  type: string
+                  example: single/multiple
+                  anyOf:
+                    - type: string
+                      enum: [ single, multiple ]
+                singleEntry:
+                  type: object
+                  description: Only applied if entryType is "single"
+                  properties:
+                    plannedEntryTime:
+                      type: string
+                      example: 2022-01-01T00:00:00Z
+                    plannedExitTime:
+                      type: string
+                      example: 2022-01-01T02:00:00Z
+                    preCollectedFare:
+                      type: number
+                      example: 100
+                multipleEntry:
+                  type: object
+                  description: Only applied if entryType is "multiple"
+                  properties:
+                    startDate:
+                      type: string
+                      example: 2022-01-01
+                    endDate:
+                      type: string
+                      example: 2022-01-31
+                    slotName:
+                      type: string
+                      example: Full Day
+                fareGroup:
+                  type: string
+                  example: visitor
+              required:
+                - passId
+                - parkingId
+                - vehicle
+                - fareGroup
+                - entryType
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+                    
+  /<webhook:revokePassUrl>:
+    post:
+      tags: 
+        - Webhook Operations
+      summary: External webhook for revoke pass url
+      description: External webhook for revoke pass url
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                passId:
+                  type: string
+                  example: pass0001-0000-0000-0000-000000000000
+              required:
+                - id
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+                    
+  /<webhook:setPricingUrl>:
+    post:
+      tags: 
+        - Webhook Operations
+      summary: External webhook for set pricing url
+      description: External webhook for set pricing url
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                parkingId:
+                  type: string
+                  example: parking1-0000-0000-0000-000000000000
+                fareGroups:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name: 
+                        type: string
+                        example: visitor
+                      options:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            daysOfWeek: 
+                              type: array
+                              items:
+                                type: number
+                              example: [ 0, 1, 2, 3, 4, 5, 6 ]
+                            freeUntilMins: 
+                              type: number
+                              example: 60
+                            overtimePrices:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  intervalInMins: 
+                                    type: number
+                                    example: 60
+                                  price4w: 
+                                    type: number
+                                    example: 100
+                                  price2w: 
+                                    type: number
+                                    example: 50
+                            slotPrices:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  name:
+                                    type: string
+                                    example: "Full Day"
+                                  startTime:
+                                    type: number
+                                    example: 2024-01-01T08:00:00Z
+                                  endTime:
+                                    type: number
+                                    example: 2024-01-01T20:00:00Z
+                                  price4w: 
+                                    type: number
+                                    example: 300
+                                  price2w: 
+                                    type: number
+                                    example: 120
+                            durationPrices:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  minDurationInMins:
+                                    type: number
+                                    example: 0
+                                  maxDurationInMins:
+                                    type: number
+                                    example: 240
+                                  price4w: 
+                                    type: number
+                                    example: 200
+                                  price2w: 
+                                    type: number
+                                    example: 100
+                            
+              required:
+                - parkingId
+                - fareGroups
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+                    
+  /<webhook:setVehicleInfo>:
+    post:
+      tags: 
+        - Webhook Operations
+      summary: External webhook for adding pass url
+      description: External webhook for adding pass url
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                parkingId:
+                  type: string
+                  example: parking1-0000-0000-0000-000000000000
+                vehicle:
+                  $ref: '#/components/schemas/Vehicle'
+                fareGroup:
+                  type: string
+                  example: visitor
+                isBlacklisted:
+                  type: boolean
+              required:
+                - parkingId
+                - vehicle
+                - fareGroup
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+                    
+  /<webhook:deleteVehicleInfo>:
+    post:
+      tags:
+        - Webhook Operations
+      summary: External webhook for adding pass url
+      description: External webhook for adding pass url
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                parkingId:
+                  type: string
+                  example: parking1-0000-0000-0000-000000000000
+                vehicleNo:
+                  type: string
+                  example: DL01AA1234
+              required:
+                - parkingId
+                - vehicleNo
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
