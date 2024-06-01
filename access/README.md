@@ -105,9 +105,9 @@ For enhanced security, Aeria requires you to sign every request sent to their AP
 
 1. Include your Partner ID (PID) in the request header with the key `x-partner-code`. This helps Aeria identify your account.
 2. Deep sort the params and body data alphabetically.
-3. Sign the JSON stringified data of the format `{params: {[key: string]: string}, body: {[key: string]: any}}` using the AES256 encryption algorithm with secret key.
-4. Generate a hash of the signed data using the bcrypt hashing algorithm.
-5. Include this hash in the request header with the key `x-signature`.
+3. Generate a hash of the JSON stringified data of the format `{params: {[key: string]: string}, body: {[key: string]: any}}` using the bcrypt hashing algorithm.
+4. Encrypt the hash using the Crypto.AES encryption algorithm with secret key.
+5. Include this encrypted hash in the request header with the key `x-signature`.
 
 > **Note**: Aeria follows the same signing request steps when calling any webhook with the webhook secret key, ensuring secure communication between systems.
 
