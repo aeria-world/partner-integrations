@@ -1,0 +1,829 @@
+openapi: 3.0.0
+info:
+  version: v1
+  title: External Access Integration API's
+  description: Can integrate any 3rd party access solution with our system. We
+    will send the partner id and a secret key to partners to validate each API
+    call. <br/>Access Operations:- Realtime call to Aeria for access movements
+    and operability status update <br/>Webhook Operations:- Access Group and
+    Pass configuration for access partner <br/>Full Integration steps at <a
+    href='https://github.com/aeria-world/partner-integrations/blob/main/access/README.md'>Documentation</a>
+tags:
+  - name: Access Operations
+    description: APIs For Access Operations
+  - name: Webhook Operations
+    description: APIs For Webhook Operations
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Enter JWT token
+
+security:
+  - BearerAuth: []
+
+paths:
+  /access/v1/property/:propertyId/access-point:
+    post:
+      tags:
+        - Access Operations
+      summary: Api for creating access point for a property
+      description: Called when the partner wants to link a new hardware access point with the Aeria SaaS platform
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Tower 1 Access Point Gate
+                authenticationMethods:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - ble
+                      - nfc
+                      - qr
+                      - rfid
+                      - fingerprint
+                      - facial_recognition
+                      - voice
+                      - retina_scan
+                      - pin
+                      - passcode
+                movementTypes:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - in
+                      - out 
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+                  data:
+                    type: object
+                    example:
+                      passId: point001-0000-0000-0000-000000000000
+
+  /access/v1/access-point/:accessPointId/mark-movement:
+    post:
+      tags:
+        - Access Operations
+      summary: Api for marking movement of a person
+      description: Called when a valid credential is provided at the access point to facilitate movement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                passId:
+                  type: string
+                  example: pass0001-0000-0000-0000-000000000000
+                timestamp:
+                  type: string
+                  example: 2024-01-01T12:00:00.000
+                method:
+                  type: string
+                  example: ble | nfc | qr
+                movementType:
+                  type: string
+                  example: enter | exit
+              required:
+                - passId
+                - timestamp
+                - method
+                - movementType
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+                  data:
+                    type: object
+                    example:
+                      passId: pass0001-0000-0000-0000-000000000000
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+
+  /parking/v1/partner/setup/webhook:
+    patch:
+      tags:
+        - Access Operations
+      summary: Api for setting up the parking
+      description: Api for setting up the parking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                addPropertyUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/property/create
+                addOffDayUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/off-day/create
+                addTimeZoneUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/time-zone/create
+                addAccessGroupUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/access-group/create
+                removeAccessGroupUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/access-group/remove
+                addUserUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/user/create
+                removeUserUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/user/remove
+                addUserIdentificationUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/user-identification/create
+                removeUserIdentificationUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/user-identification/remove
+                assignAccessGroupUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/access-group/assign
+                revokeAccessGroupUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/access-group/revoke   
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+
+  /<webhook:addPropertyUrl>:
+    post:
+      tags:
+        - Webhook Operations
+      summary: External webhook for adding a new property to the partner
+      description: Whenever a property is associated with the partner, it is pushed to the partner ecosystem via this webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                propertyId:
+                  type: string
+                  example: prop0001-0000-0000-0000-000000000000
+                name:
+                  type: string
+                  example: DLF Cyber City
+                address:
+                  type: string
+                  example: Sector 29, Gurugram, Haryana, India, 122001
+                cityName:
+                  type: string
+                  example: Gurugram
+                coordinates:
+                  type: string
+                  example: 12.6473,72.6484
+                status:
+                  type: string
+                  example: active
+              required:
+                - id
+                - name
+                - address
+                - cityName
+                - coordinates
+                - status
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: someid-of-partner-ecosystem-0001
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+
+  /<webhook:addOffDayUrl>:
+    post:
+      tags:
+        - Webhook Operations
+      summary: External webhook for adding an off day to the partner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  example: dayoff01-0000-0000-0000-000000000000
+                propertyId:
+                  type: string
+                  example: prop0001-0000-0000-0000-000000000000
+                name:
+                  type: string
+                  example: Alternate Weekend Off
+                frequency:
+                  type: string
+                  enum:
+                    - weekly
+                    - monthly
+                    - yearly
+                    - one-time
+                oneTimeConfig:
+                  type: object
+                  properties:
+                    date:
+                      type: string
+                      example: 2024-01-01T12:00:00.000
+                      format: yyyy-MM-ddTHH:mm:ssZ
+                yearlyConfig:
+                  type: object
+                  properties:
+                    dayOfYear:
+                      type: string
+                      example: 31/12
+                      format: dd/MM
+                monthlyConfig:
+                  type: object
+                  properties:
+                    dayOfMonth:
+                      type: integer
+                      example: 1
+                      minimum: 1
+                      maximum: 31
+                weeklyConfig:
+                  type: object
+                  properties:
+                    daysOfWeek:
+                      type: array
+                      items:
+                        type: string
+                        enum:
+                          - monday
+                          - tuesday
+                          - wednesday
+                          - thursday
+                          - friday
+                          - saturday
+                          - sunday
+                      minItems: 1
+                      example: 
+                        - saturday
+                        - sunday
+                    repeatInWeeks:
+                      type: array
+                      items:
+                        type: integer
+                        minimum: 1
+                        maximum: 5
+                      example: 
+                        - 2
+                        - 4
+              required:
+                - propertyId
+                - date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: someid-of-partner-ecosystem-0001
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+
+  /<webhook:addTimeZoneUrl>:
+    post:
+      tags:
+        - Webhook Operations
+      summary: External webhook for adding a time zone to the partner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  example: timezone01-0000-0000-0000-000000000000
+                propertyId:
+                  type: string
+                  example: prop0001-0000-0000-0000-000000000000
+                name:
+                  type: string
+                  example: Full day shift
+                hours:
+                  type: object
+                  properties:
+                    startTime:
+                      type: string
+                      example: 00:00
+                      format: HH:mm
+                    endTime:
+                      type: string
+                      example: 23:59
+                      format: HH:mm
+              required:
+                - propertyId
+                - name
+                - hours
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: someid-of-partner-ecosystem-0001
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+
+  /<webhook:addAccessGroupUrl>:
+    post:
+      tags:
+        - Webhook Operations
+      summary: External webhook for adding an access group to the partner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  example: accessgroup01-0000-0000-0000-000000000000
+                propertyId:
+                  type: string
+                  example: prop0001-0000-0000-0000-000000000000
+                name:
+                  type: string
+                  example: DL01
+                timeZoneId:
+                  type: string
+                  example: timezone01-0000-0000-0000-000000000000
+                accessPoints:
+                  type: array
+                  items:
+                    type: string
+                    example: 
+                    - point01-0000-0000-0000-000000000000
+                    - point02-0000-0000-0000-000000000000
+                    - point03-0000-0000-0000-000000000000
+              required:
+                - propertyId
+                - name
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: someid-of-partner-ecosystem-0001
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+  /<webhook:removeAccessGroupUrl>:
+    post:
+      tags:
+        - Webhook Operations
+      summary: External webhook for removing an access group from the partner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                propertyId:
+                  type: string
+                  example: prop0001-0000-0000-0000-000000000000
+                accessGroupId:
+                  type: string
+                  example: accessgroup01-0000-0000-0000-000000000000
+              required:
+                - propertyId
+                - accessGroupId
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: someid-of-partner-ecosystem-0001
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+  
+  /<webhook:addUserUrl>:
+    post:
+      tags:
+        - Webhook Operations
+      summary: External webhook for adding a user to the partner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  example: user01-0000-0000-0000-000000000000
+                propertyId:
+                  type: string
+                  example: prop0001-0000-0000-0000-000000000000
+                username:
+                  type: string
+                  example: ACCN001347
+                email:
+                  type: string
+                  example: ACCN001347@upin.aeria.world
+              required:
+                - propertyId
+                - username
+                - email
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: someid-of-partner-ecosystem-0001
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+
+  /<webhook:removeUserUrl>:
+    post:
+      tags:
+        - Webhook Operations
+      summary: External webhook for removing a user from the partner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                propertyId:
+                  type: string
+                  example: prop0001-0000-0000-0000-000000000000
+                userId:
+                  type: string
+                  example: user01-0000-0000-0000-000000000000
+              required:
+                - propertyId
+                - userId
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: someid-of-partner-ecosystem-0001
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+
+  /<webhook:addUserIdentificationUrl>:
+    post:
+      tags:
+        - Webhook Operations
+      summary: External webhook for adding a user identification to the partner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                propertyId:
+                  type: string
+                  example: prop0001-0000-0000-0000-000000000000
+                userId:
+                  type: string
+                  example: user01-0000-0000-0000-000000000000
+                identificationType:
+                  type: string
+                  enum:
+                    - pin
+                    - passcode
+                value:
+                  type: string
+                  example: 123456
+              required:
+                - propertyId
+                - userId
+                - identificationType
+                - value
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: someid-of-partner-ecosystem-0001
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+
+  /<webhook:removeUserIdentificationUrl>:
+    post:
+      tags:
+        - Webhook Operations
+      summary: External webhook for removing a user identification from the partner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                propertyId:
+                  type: string
+                  example: prop0001-0000-0000-0000-000000000000
+                userId:
+                  type: string
+                  example: user01-0000-0000-0000-000000000000
+                identificationType:
+                  type: string
+                  enum:
+                    - pin
+                    - passcode
+              required:
+                - propertyId
+                - userId
+                - identificationType
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: someid-of-partner-ecosystem-0001
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string 
+                    example: Unauthorized access
+
+  /<webhook:assignAccessGroupUrl>:
+    post:
+      tags:
+        - Webhook Operations
+      summary: External webhook for assigning an access group to a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                propertyId:
+                  type: string
+                  example: prop0001-0000-0000-0000-000000000000
+                accessGroupId:
+                  type: string
+                  example: accessgroup01-0000-0000-0000-000000000000
+                userId:
+                  type: string
+                  example: user01-0000-0000-0000-000000000000
+                dayOffIds:
+                  type: array
+                  items:
+                    type: string
+                    example: 
+                    - dayoff01-0000-0000-0000-000000000000
+                    - dayoff02-0000-0000-0000-000000000000
+                validFrom:
+                  type: string
+                  example: 2020-01-01
+                validTill:
+                  type: string
+                  example: 2020-01-01
+              required:
+                - propertyId
+                - accessGroupId
+                - userId
+                - validFrom
+                - validTill
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: someid-of-partner-ecosystem-0001
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+
+  /<webhook:revokeAccessGroupUrl>:
+    post:
+      tags:
+        - Webhook Operations
+      summary: External webhook for revoking an access group from a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                propertyId:
+                  type: string
+                  example: prop0001-0000-0000-0000-000000000000
+                accessGroupId:
+                  type: string
+                  example: accessgroup01-0000-0000-0000-000000000000
+                userId: 
+                  type: string
+                  example: user01-0000-0000-0000-000000000000
+              required:
+                - propertyId
+                - accessGroupId
+                - userId
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: someid-of-partner-ecosystem-0001
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
