@@ -22,6 +22,17 @@ components:
       bearerFormat: JWT
       description: Enter JWT token
 
+  schemas:
+    repeatInWeeks:
+      type: array
+      items:
+        type: integer
+        minimum: 1
+        maximum: 5
+      example: 
+        - 2
+        - 4
+
 security:
   - BearerAuth: []
 
@@ -297,8 +308,8 @@ paths:
                   properties:
                     date:
                       type: string
-                      example: 2024-01-01T12:00:00.000
-                      format: yyyy-MM-ddTHH:mm:ssZ
+                      example: 2024-01-01
+                      format: yyyy-MM-dd
                 yearlyConfig:
                   type: object
                   properties:
@@ -318,33 +329,26 @@ paths:
                   type: object
                   properties:
                     daysOfWeek:
-                      type: array
-                      items:
-                        type: string
-                        enum:
-                          - monday
-                          - tuesday
-                          - wednesday
-                          - thursday
-                          - friday
-                          - saturday
-                          - sunday
-                      minItems: 1
-                      example: 
-                        - saturday
-                        - sunday
-                    repeatInWeeks:
-                      type: array
-                      items:
-                        type: integer
-                        minimum: 1
-                        maximum: 5
-                      example: 
-                        - 2
-                        - 4
+                      type: object
+                      properties:
+                        monday:
+                          $ref: '#/components/schemas/repeatInWeeks'
+                        tuesday:
+                          $ref: '#/components/schemas/repeatInWeeks'
+                        wednesday:
+                          $ref: '#/components/schemas/repeatInWeeks'
+                        thursday:
+                          $ref: '#/components/schemas/repeatInWeeks'
+                        friday:
+                          $ref: '#/components/schemas/repeatInWeeks'
+                        saturday:
+                          $ref: '#/components/schemas/repeatInWeeks'
+                        sunday:
+                          $ref: '#/components/schemas/repeatInWeeks'
               required:
                 - propertyId
-                - date
+                - name
+                - frequency
       responses:
         '200':
           description: OK
