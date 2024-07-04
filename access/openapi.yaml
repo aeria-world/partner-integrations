@@ -32,6 +32,26 @@ components:
       example: 
         - 2
         - 4
+    movement:
+      type: object
+      properties:
+        userId:
+          type: string
+          example: user0001-0000-0000-0000-000000000000
+        timestamp:
+          type: string
+          example: 2024-01-01T12:00:00.000
+        method:
+          type: string
+          example: ble | nfc | qr
+        movementType:
+          type: string
+          example: enter | exit
+      required:
+        - userId
+        - timestamp
+        - method
+        - movementType
 
 security:
   - BearerAuth: []
@@ -50,6 +70,9 @@ paths:
             schema:
               type: object
               properties:
+                id:
+                  type: string
+                  example: point001-0000-0000-0000-000000000000
                 name:
                   type: string
                   example: Tower 1 Access Point Gate
@@ -89,7 +112,7 @@ paths:
                   data:
                     type: object
                     example:
-                      passId: point001-0000-0000-0000-000000000000
+                      id: point001-0000-0000-0000-000000000000
 
   /access/v1/access-point/:accessPointId/mark-movement:
     post:
@@ -101,26 +124,10 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              properties:
-                passId:
-                  type: string
-                  example: pass0001-0000-0000-0000-000000000000
-                timestamp:
-                  type: string
-                  example: 2024-01-01T12:00:00.000
-                method:
-                  type: string
-                  example: ble | nfc | qr
-                movementType:
-                  type: string
-                  example: enter | exit
-              required:
-                - passId
-                - timestamp
-                - method
-                - movementType
+            schema: 
+              type: array
+              items:
+                $ref: '#/components/schemas/movement'
       responses:
         '200':
           description: OK
@@ -132,10 +139,6 @@ paths:
                   message:
                     type: string
                     example: Success
-                  data:
-                    type: object
-                    example:
-                      passId: pass0001-0000-0000-0000-000000000000
         '401':
           description: Unauthorized
           content:
@@ -169,7 +172,10 @@ paths:
                 addTimeZoneUrl:
                   type: string
                   example: https://partner.aeria.com/webhook/time-zone/create
-                addAccessGroupUrl:
+                addSimpleAccessGroupUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/access-group/create
+                addAdvancedAccessGroupUrl:
                   type: string
                   example: https://partner.aeria.com/webhook/access-group/create
                 removeAccessGroupUrl:
@@ -193,6 +199,9 @@ paths:
                 revokeAccessGroupUrl:
                   type: string
                   example: https://partner.aeria.com/webhook/access-group/revoke   
+                getIdentityQRUrl:
+                  type: string
+                  example: https://partner.aeria.com/webhook/user-identification/qr
       responses:
         '200':
           description: OK
@@ -243,6 +252,10 @@ paths:
                 coordinates:
                   type: string
                   example: 12.6473,72.6484
+                timezone:
+                  type: string
+                  example: +05:30
+                  description: UTC offset format
                 status:
                   type: string
                   example: active
@@ -429,11 +442,11 @@ paths:
                     type: string
                     example: Unauthorized access
 
-  /<webhook:addAccessGroupUrl>:
+  /<webhook:addSimpleAccessGroupUrl>:
     post:
       tags:
         - Webhook Operations
-      summary: External webhook for adding an access group to the partner
+      summary: External webhook for adding a simple configuration access group to the partner
       requestBody:
         required: true
         content:
@@ -453,7 +466,7 @@ paths:
                 timeZoneId:
                   type: string
                   example: timezone01-0000-0000-0000-000000000000
-                accessPoints:
+                accessPointIds:
                   type: array
                   items:
                     type: string
@@ -461,6 +474,64 @@ paths:
                     - point01-0000-0000-0000-000000000000
                     - point02-0000-0000-0000-000000000000
                     - point03-0000-0000-0000-000000000000
+              required:
+                - propertyId
+                - name
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: someid-of-partner-ecosystem-0001
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+  /<webhook:addAdvancedAccessGroupUrl>:
+    post:
+      tags:
+        - Webhook Operations
+      summary: External webhook for adding an advanced configuration access group to the partner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  example: accessgroup01-0000-0000-0000-000000000000
+                propertyId:
+                  type: string
+                  example: prop0001-0000-0000-0000-000000000000
+                name:
+                  type: string
+                  example: DL01
+                accessPoints:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      accessPointId:
+                        type: string
+                        example: point01-0000-0000-0000-000000000000
+                      timeZoneIds:
+                        type: array
+                        items:
+                          type: string
+                          example: tz000001-0000-0000-0000-000000000000
               required:
                 - propertyId
                 - name
@@ -542,7 +613,7 @@ paths:
               properties:
                 id:
                   type: string
-                  example: user01-0000-0000-0000-000000000000
+                  example: user0001-0000-0000-0000-000000000000
                 propertyId:
                   type: string
                   example: prop0001-0000-0000-0000-000000000000
@@ -686,21 +757,11 @@ paths:
             schema:
               type: object
               properties:
-                propertyId:
+                id:
                   type: string
-                  example: prop0001-0000-0000-0000-000000000000
-                userId:
-                  type: string
-                  example: user01-0000-0000-0000-000000000000
-                identificationType:
-                  type: string
-                  enum:
-                    - pin
-                    - passcode
+                  example: someid-of-partner-ecosystem-0001
               required:
-                - propertyId
-                - userId
-                - identificationType
+                - id
       responses:
         '200':
           description: OK
@@ -821,6 +882,52 @@ paths:
                   id:
                     type: string
                     example: someid-of-partner-ecosystem-0001
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+  /<webhook:getIdentityQRUrl>:
+    post:
+      tags:
+        - Webhook Operations
+      summary: External webhook for getting an QR based access identity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: string
+                  example: prop0001-0000-0000-0000-000000000000
+                propertyId:
+                  type: string
+                  example: prop0001-0000-0000-0000-000000000000
+                expiry:
+                  type: string
+                  example: 2020-01-01T12:00:00.000
+              required:
+                - userId
+                - propertyId
+                - expiry
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  encryptedIdentity:
+                    type: string
+                    example: hashedEncryptedIdentityWithExpiry
         '401':
           description: Unauthorized
           content:
