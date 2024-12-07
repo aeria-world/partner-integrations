@@ -1,0 +1,762 @@
+openapi: 3.0.0
+info:
+  version: v1
+  title: Parking Deep Integration API's
+  description: "Deep integration APIs for parking. Aeria handles the authorization and price calculation, while the partner handles the parking operations."
+tags: 
+  - name: Parking Operations
+    description: APIs For Parking Operations
+  - name: Webhook Operations
+    description: APIs For Webhook Operations
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Enter JWT token
+  schemas:
+    Vehicle:
+      type: object
+      properties:
+        registrationNumber:
+          type: string
+          example: MH01AB1234
+        type:
+          type: string
+          example: 4w
+          anyOf:
+            - type: string
+              enum: [ 4w, 2w ]
+        model:
+          type: string
+          example: Honda City
+          nullable: true
+        color:
+          type: string
+          example: red
+          nullable: true
+        fastagNo:
+          type: string
+          example: 12345
+          nullable: true
+        geotaagNo:
+          type: string
+          example: 12345
+          nullable: true
+    Bay:
+      type: object
+      properties:
+        name:
+          type: string
+          example: A-14
+        location:
+          type: string
+          example: Green Zone
+        parkingName:
+          type: string
+          example: Basement 1
+    Availability:
+      type: object
+      properties:
+        total:
+          type: number
+          example: 10
+        available:
+          type: number
+          example: 5
+    
+security: 
+  - BearerAuth: []
+
+# Parking Operations
+  
+paths:
+  /parking/v1/integration/{integrationId}/category-availabilty:
+    get:
+      tags: 
+        - Parking Operations
+      summary: Api for getting category summary
+      description: Api for getting category summary
+      parameters:
+        - in: path
+          name: integrationId
+          required: true
+          schema:
+            type: string
+          description: The integration id
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+                  data:
+                    type: object
+                    properties:
+                      categories:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            name:
+                              type: string
+                            4w:
+                              $ref: '#/components/schemas/Availability'
+                            2w:
+                              $ref: '#/components/schemas/Availability'
+                    example:
+                      categories:
+                        - id: 00000000-0000-0000-0000-000000000000
+                          name: Accenture
+                          4w:
+                            total: 10
+                            available: 5
+                          2w:
+                            total: 10
+                            available: 5
+                        - id: 00000000-0000-0000-0000-000000000001
+                          name: Visitor
+                          4w:
+                            total: 10
+                            available: 5
+                          2w:
+                            total: 10
+                            available: 5
+                        
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+
+  /parking/v1/integration/{integrationId}/request-entry:
+    post:
+      tags: 
+        - Parking Operations
+      summary: Api for requesting entry of a vehicle
+      description: Aeria will handle the authorization based category of the pre registered vehicle and the bay availability. For successful authorization, Aeria will send a bay detail to the partner that will be displayed on the screen at the entry
+      parameters:
+        - in: path
+          name: integrationId
+          required: true
+          schema:
+            type: string
+          description: The integration id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                vehicle:
+                  $ref: '#/components/schemas/Vehicle'
+                barrierId:
+                  type: string
+                  example: some-barrier-id
+              required:
+                - vehicle
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+                  data:
+                    type: object
+                    required:
+                      - bay
+                    properties:
+                      entryTime:
+                        type: string
+                        example: 2022-01-01T00:00:00Z
+                      bay:
+                        $ref: '#/components/schemas/Bay'
+                      category: 
+                        type: string
+                        example: Reserved
+        '410':
+          description: Gone
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: 'No bay available'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                description: If x-partner-id is not present in the header or is invalid
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: object
+                description: The partner is not authorized to access the site
+                properties:
+                  error:
+                    type: string
+                    example: Forbidden access
+                    
+  /parking/v1/integration/{integrationId}/request-exit:
+    post:
+      tags: 
+        - Parking Operations
+      summary: Api for requesting exit of a vehicle
+      description: Aeria will handle the authorization based on the pre registered vehicle and the exit time. For successful authorization, Aeria will send the fare details to the partner that will be displayed on the screen at the exit and collect the fare
+      parameters:
+        - in: path
+          name: integrationId
+          required: true
+          schema:
+            type: string
+          description: The integration id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                vehicleNo:
+                  type: string
+                  example: DL01AA0007
+                barrierId:
+                  type: string
+                  example: some-barrier-id
+              required:
+                - vehicleNo
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+                  data:
+                    type: object
+                    properties:
+                      entryTime:
+                        type: string
+                        example: 2022-01-01T00:00:00Z
+                      exitTime:
+                        type: string
+                        example: 2022-01-01T02:00:00Z
+                      totalFare:
+                        type: number
+                        example: 100
+                      preCollectedFare:
+                        type: number
+                        example: 50
+                      categoryId:
+                        type: string
+                        example: 00000000-0000-0000-0000-000000000000
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+
+  /parking/v1/integration/{integrationId}/movement-logs:
+    post:
+      tags: 
+        - Parking Operations
+      summary: Log the entry and exit of a vehicle
+      description: Partner will log the entry and exit of a vehicle that was allowed offline
+      parameters:
+        - in: path
+          name: integrationId
+          required: true
+          schema:
+            type: string
+          description: The integration id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  vehicleNo:
+                    type: string
+                    example: DL01AA0007
+                  time:
+                    type: string
+                    example: 2022-01-01T00:00:00Z
+                  type:
+                    type: string
+                    example: entry
+                    anyOf:
+                      - type: string
+                        enum: [ entry, exit ]
+                  categoryId:
+                    type: string
+                    example: 00000000-0000-0000-0000-000000000000
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+
+# Webhook Operations
+                    
+  /<webhook:allowEntry>:
+    post:
+      tags: 
+        - Webhook Operations
+      summary: Allow entry of a vehicle at the barrier
+      description: Aeria will send a request to the partner to allow entry of a vehicle at the barrier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                registrationNumber:
+                  type: string
+                  example: MH01AB1234
+                validTill:
+                  type: string
+                  example: 2022-01-01T00:00:00Z
+                barrierId:
+                  type: string
+                  example: barrier1-0000-0000-0000-000000000000
+              required:
+                - registrationNumber
+                - validTill
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+
+  /<webhook:allowExit>:
+    post:
+      tags: 
+        - Webhook Operations
+      summary: Allow exit of a vehicle at the barrier
+      description: Aeria will send a request to the partner to allow exit of a vehicle at the barrier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                registrationNumber:
+                  type: string
+                  example: MH01AB1234
+                vehicleType:
+                  type: string
+                  example: 4w
+                  anyOf:
+                    - type: string
+                      enum: [ 4w, 2w ]
+                totalFare:
+                  type: number
+                  example: 100
+                validTill:
+                  type: string
+                  example: 2022-01-01T00:00:00Z
+              required:
+                - registrationNumber
+                - vehicleType
+                - totalFare
+                - validTill
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+  
+  /<webhook:addWhitelistUser>:
+    post:
+      tags: 
+        - Webhook Operations
+      summary: Add a user to the whitelist, update the registration numbers and parallel entries if already present
+      description: Aeria will send a request to the partner to add a user to the whitelist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                integrationId:
+                  type: string
+                  example: 00000000-0000-0000-0000-000000000000
+                userId:
+                  type: string
+                  example: user1-0000-0000-0000-000000000000
+                registeredVehicles:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      registrationNumber:
+                        type: string
+                        example: MH01AB1234
+                      type:
+                        type: string
+                        anyOf:
+                          - type: string
+                            enum: [ 4w, 2w ]                 
+                parallelEntries:
+                  type: number
+                  default: 1
+                  example: 1
+                type:
+                  type: string
+                  example: reserved
+                  anyOf:
+                    - type: string
+                      enum: [ reserved, flexi, booked ]
+                flextCategoryIds:
+                  type: array
+                  items:
+                    type: string
+                    example: 00000000-0000-0000-0000-000000000000
+                  description: Count to be deducted for flexi parking from first category with available bays
+                allotedBay:
+                  description: The bay to be alloted to the user when booking
+                  $ref: '#/components/schemas/Bay'
+              required:
+                - integrationId
+                - userId
+                - registeredVehicles
+                - type
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+  
+  /<webhook:removeWhitelistUser>:
+    post:
+      tags: 
+        - Webhook Operations
+      summary: Remove a user from the whitelist
+      description: Aeria will send a request to the partner to remove a user from the whitelist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                integrationId:
+                  type: string
+                  example: 00000000-0000-0000-0000-000000000000
+                userId:
+                  type: string
+                  example: user1-0000-0000-0000-000000000000
+              required:
+                - integrationId
+                - userId
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+  
+  /<webhook:addBooking>:
+    post:
+      tags: 
+        - Webhook Operations
+      summary: Add a booking for a user
+      description: Aeria will send a request to the partner to add a booking for a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                integrationId:
+                  type: string
+                  example: 00000000-0000-0000-0000-000000000000
+                bookingId:
+                  type: string
+                  example: user1-0000-0000-0000-000000000000
+                allowedRegistartionNumbers:
+                  type: array
+                  items:
+                    type: string
+                    example: MH01AB1234
+                vehicleType:
+                  type: string
+                  example: 4w
+                  anyOf:
+                    - type: string
+                      enum: [ 4w, 2w ]
+                validFrom:
+                  type: string
+                  example: 2022-01-01T00:00:00Z
+                validTill:
+                  type: string
+                  example: 2022-01-01T02:00:00Z
+                bay:
+                  $ref: '#/components/schemas/Bay'
+              required:
+                - integrationId
+                - bookingId
+                - allowedRegistartionNumbers
+                - vehicleType
+                - validFrom
+                - validTill
+                - bay
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+  
+  /<webhook:removeBooking>:
+    post:
+      tags: 
+        - Webhook Operations
+      summary: Remove a booking for a user
+      description: Aeria will send a request to the partner to remove a booking for a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                integrationId:
+                  type: string
+                  example: 00000000-0000-0000-0000-000000000000
+                bookingId:
+                  type: string
+                  example: booking1-0000-0000-0000-000000000000
+              required:
+                - integrationId
+                - bookingId
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+
+  /<webhook:getLogs>:
+    get:
+      tags: 
+        - Webhook Operations
+      summary: Get the logs of the integration
+      description: Aeria will send a request to the partner to get the logs of the integration
+      parameters:
+        - in: query
+          name: integrationId
+          required: true
+          schema:
+            type: string
+          description: The integration id
+        - in: query
+          name: from
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: The start time
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date-time
+            default: now()
+          description: The end time
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        registrationNumber:
+                          type: string
+                          example: MH01AB1234
+                        time:
+                          type: string
+                          example: 2022-01-01T00:00:00Z
+                        type:
+                          type: string
+                          example: entry
+                          anyOf:
+                            - type: string
+                              enum: [ entry, exit ]
+                        categoryId:
+                          type: string
+                          example: 00000000-0000-0000-0000-000000000000
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
