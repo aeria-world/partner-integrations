@@ -45,6 +45,9 @@ components:
           type: string
           example: 12345
           nullable: true
+      required:
+        - registrationNumber
+        - type
     Bay:
       type: object
       properties:
@@ -53,10 +56,9 @@ components:
           example: A-14
         location:
           type: string
-          example: Green Zone
-        parkingName:
-          type: string
-          example: Basement 1
+          example: Green Zone, Basement 1
+      required:
+        - location
     Availability:
       type: object
       properties:
@@ -113,6 +115,8 @@ paths:
                               $ref: '#/components/schemas/Availability'
                             2w:
                               $ref: '#/components/schemas/Availability'
+                      defaultVisitorCategoryId:
+                        type: string
                     example:
                       categories:
                         - id: 00000000-0000-0000-0000-000000000000
@@ -131,6 +135,7 @@ paths:
                           2w:
                             total: 10
                             available: 5
+                      defaultVisitorCategoryId: 00000000-0000-0000-0000-000000000001
                         
         '401':
           description: Unauthorized
@@ -184,7 +189,7 @@ paths:
                   data:
                     type: object
                     required:
-                      - bay
+                      - entryTime
                     properties:
                       entryTime:
                         type: string
@@ -332,6 +337,14 @@ paths:
                   categoryId:
                     type: string
                     example: 00000000-0000-0000-0000-000000000000
+                  barrierId:
+                    type: string
+                    example: some-barrier-id
+                required:
+                  - vehicleNo
+                  - time
+                  - type
+                  - categoryId
       responses:
         '200':
           description: OK
@@ -431,6 +444,9 @@ paths:
                 validTill:
                   type: string
                   example: 2022-01-01T00:00:00Z
+                barrierId:
+                  type: string
+                  example: some-barrier-id
               required:
                 - registrationNumber
                 - vehicleType
@@ -458,7 +474,7 @@ paths:
                     type: string
                     example: Unauthorized access
   
-  /<webhook:addWhitelistUser>:
+  /<webhook:addWhitelistReservedUser>:
     post:
       tags: 
         - Webhook Operations
@@ -477,43 +493,100 @@ paths:
                 userId:
                   type: string
                   example: user1-0000-0000-0000-000000000000
-                registeredVehicles:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      registrationNumber:
-                        type: string
-                        example: MH01AB1234
-                      type:
-                        type: string
-                        anyOf:
-                          - type: string
-                            enum: [ 4w, 2w ]                 
-                parallelEntries:
-                  type: number
-                  default: 1
-                  example: 1
-                type:
-                  type: string
-                  example: reserved
-                  anyOf:
-                    - type: string
-                      enum: [ reserved, flexi, booked ]
-                flextCategoryIds:
+                allowedRegistartionNumbers:
                   type: array
                   items:
                     type: string
-                    example: 00000000-0000-0000-0000-000000000000
-                  description: Count to be deducted for flexi parking from first category with available bays
-                allotedBay:
+                    example: MH01AB1234
+                vehicleType:
+                  type: string
+                  example: 4w
+                  anyOf:
+                    - type: string
+                      enum: [ 4w, 2w ]
+                validFrom:
+                  type: string
+                  example: 2022-01-01T00:00:00Z
+                validTill:
+                  type: string
+                  example: 9999-12-31T23:59:59Z
+                bay:
                   description: The bay to be alloted to the user when booking
                   $ref: '#/components/schemas/Bay'
               required:
                 - integrationId
                 - userId
                 - registeredVehicles
-                - type
+                - bay
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized access
+  
+  /<webhook:addWhitelistFlexiUser>:
+    post:
+      tags: 
+        - Webhook Operations
+      summary: Add a user to the whitelist for flexi parking
+      description: Aeria will send a request to the partner to add a user to the whitelist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                integrationId:
+                  type: string
+                  example: 00000000-0000-0000-0000-000000000000
+                userId:
+                  type: string
+                  example: user1-0000-0000-0000-000000000000
+                allowedRegistartionNumbers:
+                  type: array
+                  items:
+                    type: string
+                    example: MH01AB1234
+                vehicleType:
+                  type: string
+                  example: 4w
+                  anyOf:
+                    - type: string
+                      enum: [ 4w, 2w ]
+                validFrom:
+                  type: string
+                  example: 2022-01-01T00:00:00Z
+                validTill:
+                  type: string
+                  example: 9999-12-31T23:59:59Z
+                flexiCategoryIds:
+                  type: array
+                  items:
+                    type: string
+                    example: 00000000-0000-0000-0000-000000000000
+                  description: Count to be deducted for flexi parking from first category with available bays
+              required:
+                - integrationId
+                - userId
+                - registeredVehicles
+                - flexiCategoryIds
       responses:
         '200':
           description: OK
