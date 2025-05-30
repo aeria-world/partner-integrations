@@ -6,55 +6,67 @@ This diagram outlines how Aeria integrates with your platform to manage access c
 
 ### Obtain Partner Credentials:
 
-- Aeria generates a Partner ID (PID), a Secret Key, and a Webhook Secret Key for your account. These credentials will be securely emailed to your admin upon configuration. Remember to keep them confidential as they grant access to Aeria's API.
+- Aeria onboards you as a partner and provides you with a Partner ID (PID), a Secret Key, and a Webhook Secret Key for your account. These credentials will be securely emailed to your admin upon configuration. Remember to keep them confidential as they grant access to Aeria's API.
 
 ### Set Up Webhook:
 
 - Aeria will collaborate with you to establish a set of pre-defined webhooks to ensure smooth communication between your platform and Aeria's Tenant Experience Platform. These webhooks include:
 
-    - **Add a Property**: A notification will be sent whenever Aeria adds a new property to their platform. If you're assigned as an access partner for the property via the Aeria admin dashboard, the property ID, name, and other relevant details will be shared with you through the webhook notification.
+    - **Get Doors**: A webhook that retrieves all doors configured for an integration. This endpoint is called by Aeria to get the list of doors from your system, including their reference codes, names, status, and supported authentication modes for entry and exit.
     
-    - **Add an Access Group**: You'll receive a webhook notification whenever a new access group is created, enabling Aeria to manage access permissions effectively.
-    
-    - **Add Time Zones**: Aeria requires updates on time zone changes for accurate access log tracking. Whenever a new time zone is added or modified, a webhook notification will be triggered.
-    
-    - **Modify Access Group**: This webhook notifies your system when there's a change in access group configuration, such as adding or removing access points or adjusting time zone settings within the group.
-    
-    - **Add Employee to Access Group**: Whenever an employee is added to or removed from an access group, a webhook notification will be sent. This ensures that access permissions are promptly updated for each employee, who may belong to multiple access groups.
+    - **Add or Update Time Zones**: A webhook that notifies your system whenever time zones are added or modified in Aeria's system. This ensures your platform stays synchronized with Aeria's time-based access restrictions and scheduling configurations.
 
-  Aeria's collaboration with you to configure these webhooks ensures seamless integration and efficient management of access control for the properties managed through their Tenant Experience Platform.
+    - **Get All Time Zones**: A webhook that retrieves all time zones configured for an integration. This endpoint is called by Aeria to get the list of time zones from your system, including their reference codes, names, and time zone settings. This is used to ensure your platform stays synchronized with Aeria's time-based access restrictions and scheduling configurations.
 
-## Property Management
+    - **Delete Time Zone**: A webhook that notifies your system whenever a time zone is deleted in Aeria's system.
+    
+    - **Add or Update Access Group**: A webhook that notifies your system whenever an access group is created or modified in Aeria's system. This ensures your platform stays synchronized with Aeria's access group configurations, including door assignments and time zone settings.
+    
+    - **Delete Access Group**: A webhook that notifies your system whenever an access group is deleted in Aeria's system.
+    
+    - **Add or Update User**: A webhook that notifies your system whenever a user is added or modified in Aeria's system. This ensures your platform stays synchronized with Aeria's user configurations, including their access groups and validity periods.
 
-### Register Property:
+    - **Delete User**: A webhook that notifies your system whenever a user is deleted in Aeria's system.
+
+    - **Add User Identification**: A webhook that notifies your system to activate a user identification like qr code, rfid, ble or nfc tag. The list of rfid cards are maintained in Aeria system, while the qr codes are dynamically generated. These are activated and pushed to your system via this webhook to be synced with allowed doors.
+
+    - **Delete User Identification**: A webhook that notifies your system whenever a user identification is deleted in Aeria's system.
+
+    - **Get User Identifications**: A webhook that retrieves all user identifications configured for an integration. This endpoint is called by Aeria to get the list of user identifications from your system, including their reference codes, names, and status. This is used to ensure your platform stays synchronized with Aeria's user identifications.
+
+    - **Get Movement Logs**: A webhook that retrieves all movement logs configured for an integration. This endpoint is called by Aeria to get the list of movement logs from your system, including their timestamp, user, door, identification method, and status. This log is fetched every few minutes to provide accurate access logs to Aeria's platform.
+
+  Aeria will collaborate with you to configure these webhooks to ensure seamless integration and efficient management of access control for the properties managed through their Tenant Experience Platform.
+
+## Integration Management
+
+### Register Integration:
 
 - When Aeria onboards a property, they will identify any partners designated as access partners for that specific property via the Aeria admin dashboard.
-- If you're assigned as an access partner for the property, Aeria will trigger a webhook notification to your system, informing you about the addition of the new property. This notification will include the property ID, name, and potentially other relevant details about the property.
-- Upon receiving this webhook notification, your system can automatically synchronize the new property information, ensuring seamless integration with Aeria's Tenant Experience Platform. This enables efficient management of access control and enhances the overall user experience.
+- If you're assigned as an access partner for the property, Aeria will provide with and integration id that will be used for all communication between your system and Aeria's Tenant Experience Platform.
 
-### Add Access Point:
+### Add Doors (Access Points):
 
-- Access Points are physical entities installed by partners at the properties. These Access Points serve as security measures such as flag barriers, turnstiles, or similar security points. To ensure proper management and configuration, partners need to call Aeria's API to register these Access Points with Aeria's system.
+- Doors are physical entities installed by partners at the properties. These Doors serve as security measures such as flag barriers, turnstiles, or similar security points. To ensure proper management and configuration, partners need to provide the list of Doors to Aeria when Aeria calls the `Get Doors Webhook` endpoint.
 
-- Upon registration, these Access Points will be visible in Aeria's dashboard, enabling property admins to use them for configuring access groups and managing access permissions effectively.
+- Upon registration, these Doors will be visible in Aeria's dashboard, enabling property admins to use them for configuring access groups and managing access permissions effectively.
 
     > **Key Point:**
     >
-    > Registering Access Points with Aeria's API allows seamless integration between partners' physical infrastructure and Aeria's Tenant Experience Platform. This integration streamlines access control management and enhances the overall user experience for employees and visitors accessing the properties.
-
+    > Registering Doors with Aeria's API allows seamless integration between partners' physical infrastructure and Aeria's Tenant Experience Platform. This integration streamlines access control management and enhances the overall user experience for employees and visitors accessing the properties.
 
 ## Access Control
 
 ### Create Access Groups:
 
-- Access Groups in Aeria's system serve as logical groupings of access points and time restrictions to facilitate efficient management of access to properties. They primarily focus on organizing access control settings.
+- Access Groups in Aeria's system serve as logical groupings of doors and time restrictions to facilitate efficient management of access to properties. They primarily focus on organizing access control settings.
 
-- Property administrators utilize the Aeria dashboard to create access groups, defining which access points belong to each group and setting time restrictions as needed.
+- Property administrators utilize the Aeria dashboard to create access groups, defining which doors belong to each group and setting time restrictions as needed.
 - Upon creation, a webhook is triggered to inform the partner platform about the new access group, ensuring synchronization between Aeria's system and the partner's platform.
 
 ### Manage Time Zones:
 
-- Time zones in Aeria's system serve as time-based restrictions for access points, allowing property administrators to define specific time intervals during which access is permitted or restricted.
+- Time zones in Aeria's system serve as time-based restrictions for doors, allowing property administrators to define specific time intervals during which access is permitted or restricted.
 
 - Time zone configurations can include weekly schedules specifying access permissions for different days and times. For example, access may be allowed from Monday to Friday from 8 am to 8 pm, and on Saturdays from 9 am to 1 pm. Access can also be restricted on public holidays or other specified dates.
 
@@ -65,15 +77,15 @@ This diagram outlines how Aeria integrates with your platform to manage access c
 
 ### Group Management:
 
-- Property administrators have the capability to manage access groups through the Aeria dashboard. This includes adding or removing access points from access groups, assigning time zones to groups, and viewing a list of all access points within a group within a property.
+- Property administrators have the capability to manage access groups through the Aeria dashboard. This includes adding or removing doors from access groups, assigning time zones to groups, and viewing a list of all doors within a group within a property.
 
 - Each access group can be associated with specific time zone configurations, allowing administrators to define time-based access restrictions for the group.
 
 - Any modifications made to access groups, such as adding or removing access points or updating time zone configurations, are communicated to the partner platform via webhook notifications. This ensures that the partner platform stays updated with the latest access group configurations, facilitating seamless integration and access control management.
 
-## User Access Management:
+## User Management:
 
-- User Access Management in Aeria's system facilitates the assignment of access groups to employees or visitors for seamless access to the property.
+- User Management in Aeria's system facilitates the assignment of access groups to employees or visitors for seamless access to the property.
 
 - Whenever an employee is onboarded, the admin can configure their access groups, including any validity period associated with the assignment. The same applies when a visitor is approved to enter the property, with access groups assigned to them, each having a validity period for seamless access to specific areas.
 
@@ -83,21 +95,17 @@ This diagram outlines how Aeria integrates with your platform to manage access c
 
 ### Sending Access Logs:
 
-- Whenever an authentication pass issued to any user is used at an access point, the corresponding log must be sent to Aeria immediately.
+- Whenever an authentication pass issued to any user is used at an access point, the corresponding log must be sent to Aeria immediately or in batches every few minutes.
 
 - These real-time access logs provide valuable insights into user access patterns and help enhance security measures, ensuring that Aeria's system stays updated with the latest access activities for timely monitoring and analysis.
+
+- This is an optional feature, and you can decide to send the logs at any frequency you want. If logs are sent, Aeria will retrieve the logs from your system using the `Get Movement Logs` webhook and display them in the Aeria dashboard for monitoring and analysis.
 
 # Important Integration Notes
 
 ### Aeria's APIs:
 
-- **Regenerate Credentials**: This API allows you to regenerate the Partner ID and Secret Key for your account, providing enhanced security and control over access to Aeria's services.
-
-- **Set or Update Webhooks**: With this API, you can dynamically set or update the pre-defined webhooks configured for your account, enabling flexible integration and customization according to your platform's requirements.
-
-- **Add an Access Point**: This API enables you to add new access points to Aeria's system, facilitating the expansion and customization of physical access control within the properties managed through their Tenant Experience Platform.
-
-- **Log Employee or Visitor Movement through Access Point**: This API allows you to log and track the movement of employees or visitors through access points in real-time, providing valuable insights into access patterns and enhancing security measures.
+- **Movement Logs**: This API allows you to send movement logs to Aeria's system, facilitating the expansion and customization of physical access control within the properties managed through their Tenant Experience Platform. Only the logs of known credentials are sent to Aeria's system whether the entry or exit was successful or not.
 
 ### Signing Requests with Secret Key:
 

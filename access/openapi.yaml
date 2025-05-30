@@ -21,9 +21,30 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: Enter JWT token
+  
+  parameters:
+    IntegrationIdHeader:
+      name: x-integration-id
+      in: header
+      required: true
+      schema:
+        type: string
+        example: integration0001-0000-0000-0000-000000000000
 
   schemas:
-    repeatInWeeks:
+    DaysOfWeek:
+      type: array
+      items:
+        type: string
+      example:
+        - monday
+        - tuesday
+        - wednesday
+        - thursday
+        - friday
+        - saturday
+        - sunday
+    RepeatInWeeks:
       type: array
       items:
         type: integer
@@ -32,7 +53,7 @@ components:
       example: 
         - 2
         - 4
-    movement:
+    Movement:
       type: object
       properties:
         userId:
@@ -41,85 +62,173 @@ components:
         timestamp:
           type: string
           example: 2024-01-01T12:00:00.000
-        method:
+        authMode:
           type: string
-          example: ble | nfc | qr
+          example: ble | nfc | qr | fr | pin | passcode
+        code:
+          type: string
+          example: 1234567890
+        doorId:
+          type: string
+          example: door0001-0000-0000-0000-000000000000
         movementType:
           type: string
           example: enter | exit
+        allowed:
+          type: boolean
+          example: true
       required:
         - userId
         - timestamp
-        - method
+        - authMode
+        - code
+        - doorId
         - movementType
+        - allowed
+    Door:
+      type: object
+      properties:
+        referenceCode:
+          type: string
+          example: door0001-0000-0000-0000-000000000000
+        name:
+          type: string
+          example: Door 1
+        status:
+          type: string
+          example: active | inactive | offline | unknown | maintenance | open | closed
+        entryAuthModes:
+          type: array
+          items:
+            type: string
+            example: ble | nfc | qr | fr | pin | passcode
+        exitAuthModes:
+          type: array
+          items:
+            type: string
+            example: ble | nfc | qr | fr | pin | passcode
+    Timezone:
+      type: object
+      properties:
+        id:
+          type: string
+          example: timezone0001-0000-0000-0000-000000000000
+        name:
+          type: string
+          example: Full day shift
+        timings:
+          type: array
+          items:
+            type: object
+            properties:
+              daysOfWeek:
+                $ref: '#/components/schemas/DaysOfWeek'
+              skipWeeks:
+                $ref: '#/components/schemas/RepeatInWeeks'
+              hours:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    startTime:
+                      type: string
+                      example: 00:00
+                    endTime:
+                      type: string
+                      example: 23:59
+    AccessGroup:
+      type: object
+      properties:
+        id:
+          type: string
+          example: accessgroup0001-0000-0000-0000-000000000000
+        name:
+          type: string
+          example: Access Group 1
+        doorAccess:
+          type: array
+          items:
+            type: object
+            properties:
+              doorId:
+                type: string
+                example: door0001-0000-0000-0000-000000000000
+              timeZoneId:
+                type: string
+                example: timezone0001-0000-0000-0000-000000000000
+    UserAccessGroup:
+      type: array
+      items:
+        type: object
+        properties:
+          accessGroupId:
+            type: string
+            example: accessgroup0001-0000-0000-0000-000000000000
+          validFrom:
+            type: string
+            example: 2020-01-01T12:00:00.000
+          validTill:
+            type: string
+            example: 2020-01-01T12:00:00.000
+    UserIdentification:
+      type: object
+      properties:
+        mode:
+          type: string
+          example: ble | nfc | qr | fr | pin | passcode | rfid
+        code:
+          type: string
+          example: 1234567890
+    UserIdentificationWithValidity:
+      allOf:
+        - $ref: '#/components/schemas/UserIdentification'
+        - type: object
+          properties:
+            validFrom:
+              type: string
+              example: 2020-01-01T12:00:00.000
+            validTill:
+              type: string
+              example: 2020-01-01T12:00:00.000
+  responses:
+    Success:
+      description: Success
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Unauthorized access
 
 security:
   - BearerAuth: []
 
 paths:
-  /access/v1/property/:propertyId/access-point:
+  /access/v1/integration/{integrationId}/movement-logs:
     post:
       tags:
         - Access Operations
-      summary: Api for creating access point for a property
-      description: Called when the partner wants to link a new hardware access point with the Aeria SaaS platform
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                id:
-                  type: string
-                  example: point001-0000-0000-0000-000000000000
-                name:
-                  type: string
-                  example: Tower 1 Access Point Gate
-                authenticationMethods:
-                  type: array
-                  items:
-                    type: string
-                    enum:
-                      - ble
-                      - nfc
-                      - qr
-                      - rfid
-                      - fingerprint
-                      - facial_recognition
-                      - voice
-                      - retina_scan
-                      - pin
-                      - passcode
-                movementTypes:
-                  type: array
-                  items:
-                    type: string
-                    enum:
-                      - in
-                      - out 
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Success
-                  data:
-                    type: object
-                    example:
-                      id: point001-0000-0000-0000-000000000000
-
-  /access/v1/access-point/:accessPointId/mark-movement:
-    post:
-      tags:
-        - Access Operations
-      summary: Api for marking movement of a person
-      description: Called when a valid credential is provided at the access point to facilitate movement
+      summary: Api for sending movement logs
+      description: Called when a known credential is provided at the access point to facilitate movement
+      parameters:
+        - in: path
+          name: integrationId
+          required: true
+          schema:
+            type: string
+            example: integration0001-0000-0000-0000-000000000000
       requestBody:
         required: true
         content:
@@ -127,326 +236,78 @@ paths:
             schema: 
               type: array
               items:
-                $ref: '#/components/schemas/movement'
+                $ref: '#/components/schemas/Movement'
       responses:
         '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Success
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Success'
+        '401': 
+          $ref: '#/components/responses/Unauthorized'
 
-  /parking/v1/partner/setup/webhook:
-    patch:
-      tags:
-        - Access Operations
-      summary: Api for setting up the parking
-      description: Api for setting up the parking
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                addPropertyUrl:
-                  type: string
-                  example: https://partner.aeria.com/webhook/property/create
-                addOffDayUrl:
-                  type: string
-                  example: https://partner.aeria.com/webhook/off-day/create
-                addTimeZoneUrl:
-                  type: string
-                  example: https://partner.aeria.com/webhook/time-zone/create
-                addSimpleAccessGroupUrl:
-                  type: string
-                  example: https://partner.aeria.com/webhook/access-group/create
-                addAdvancedAccessGroupUrl:
-                  type: string
-                  example: https://partner.aeria.com/webhook/access-group/create
-                removeAccessGroupUrl:
-                  type: string
-                  example: https://partner.aeria.com/webhook/access-group/remove
-                addUserUrl:
-                  type: string
-                  example: https://partner.aeria.com/webhook/user/create
-                removeUserUrl:
-                  type: string
-                  example: https://partner.aeria.com/webhook/user/remove
-                addUserIdentificationUrl:
-                  type: string
-                  example: https://partner.aeria.com/webhook/user-identification/create
-                removeUserIdentificationUrl:
-                  type: string
-                  example: https://partner.aeria.com/webhook/user-identification/remove
-                assignAccessGroupUrl:
-                  type: string
-                  example: https://partner.aeria.com/webhook/access-group/assign
-                revokeAccessGroupUrl:
-                  type: string
-                  example: https://partner.aeria.com/webhook/access-group/revoke   
-                getIdentityQRUrl:
-                  type: string
-                  example: https://partner.aeria.com/webhook/user-identification/qr
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Success
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
-
-  /<webhook:addPropertyUrl>:
-    post:
+  /<webhook:getDoors>:
+    get:
       tags:
         - Webhook Operations
-      summary: External webhook for adding a new property to the partner
-      description: Whenever a property is associated with the partner, it is pushed to the partner ecosystem via this webhook
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                propertyId:
-                  type: string
-                  example: prop0001-0000-0000-0000-000000000000
-                name:
-                  type: string
-                  example: DLF Cyber City
-                address:
-                  type: string
-                  example: Sector 29, Gurugram, Haryana, India, 122001
-                cityName:
-                  type: string
-                  example: Gurugram
-                coordinates:
-                  type: string
-                  example: 12.6473,72.6484
-                timezone:
-                  type: string
-                  example: +05:30
-                  description: UTC offset format
-                status:
-                  type: string
-                  example: active
-              required:
-                - id
-                - name
-                - address
-                - cityName
-                - coordinates
-                - status
+      summary: External webhook for getting doors
+      description: Get all doors for an integration from the partner ecosystem
+      parameters:
+        - $ref: '#/components/parameters/IntegrationIdHeader'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    example: someid-of-partner-ecosystem-0001
+                type: array
+                items:
+                  $ref: '#/components/schemas/Door'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized'
 
-  /<webhook:addOffDayUrl>:
-    post:
-      tags:
-        - Webhook Operations
-      summary: External webhook for adding an off day to the partner
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                id:
-                  type: string
-                  example: dayoff01-0000-0000-0000-000000000000
-                propertyId:
-                  type: string
-                  example: prop0001-0000-0000-0000-000000000000
-                name:
-                  type: string
-                  example: Alternate Weekend Off
-                frequency:
-                  type: string
-                  enum:
-                    - weekly
-                    - monthly
-                    - yearly
-                    - one-time
-                oneTimeConfig:
-                  type: object
-                  properties:
-                    date:
-                      type: string
-                      example: 2024-01-01
-                      format: yyyy-MM-dd
-                yearlyConfig:
-                  type: object
-                  properties:
-                    dayOfYear:
-                      type: string
-                      example: 31/12
-                      format: dd/MM
-                monthlyConfig:
-                  type: object
-                  properties:
-                    dayOfMonth:
-                      type: integer
-                      example: 1
-                      minimum: 1
-                      maximum: 31
-                weeklyConfig:
-                  type: object
-                  properties:
-                    daysOfWeek:
-                      type: object
-                      properties:
-                        monday:
-                          $ref: '#/components/schemas/repeatInWeeks'
-                        tuesday:
-                          $ref: '#/components/schemas/repeatInWeeks'
-                        wednesday:
-                          $ref: '#/components/schemas/repeatInWeeks'
-                        thursday:
-                          $ref: '#/components/schemas/repeatInWeeks'
-                        friday:
-                          $ref: '#/components/schemas/repeatInWeeks'
-                        saturday:
-                          $ref: '#/components/schemas/repeatInWeeks'
-                        sunday:
-                          $ref: '#/components/schemas/repeatInWeeks'
-              required:
-                - propertyId
-                - name
-                - frequency
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    example: someid-of-partner-ecosystem-0001
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
-
-  /<webhook:addTimeZoneUrl>:
+  /<webhook:addOrUpdateTimeZoneUrl>:
     post:
       tags:
         - Webhook Operations
       summary: External webhook for adding a time zone to the partner
+      parameters:
+        - $ref: '#/components/parameters/IntegrationIdHeader'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                id:
-                  type: string
-                  example: timezone01-0000-0000-0000-000000000000
-                propertyId:
-                  type: string
-                  example: prop0001-0000-0000-0000-000000000000
-                name:
-                  type: string
-                  example: Full day shift
-                hours:
-                  type: object
-                  properties:
-                    startTime:
-                      type: string
-                      example: 00:00
-                      format: HH:mm
-                    endTime:
-                      type: string
-                      example: 23:59
-                      format: HH:mm
-              required:
-                - propertyId
-                - name
-                - hours
+              $ref: '#/components/schemas/Timezone'
       responses:
         '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    example: someid-of-partner-ecosystem-0001
+          $ref: '#/components/responses/Success'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized'
 
-  /<webhook:addSimpleAccessGroupUrl>:
+  /<webhook:getAllTimezonesUrl>:
+    get:
+      tags:
+        - Webhook Operations
+      summary: External webhook for getting all timezones
+      parameters:
+        - $ref: '#/components/parameters/IntegrationIdHeader'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Timezone'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /<webhook:deleteTimeZoneUrl>:
     post:
       tags:
         - Webhook Operations
-      summary: External webhook for adding a simple configuration access group to the partner
+      summary: External webhook for deleting a time zone from the partner
+      parameters:
+        - $ref: '#/components/parameters/IntegrationIdHeader'
       requestBody:
         required: true
         content:
@@ -456,111 +317,41 @@ paths:
               properties:
                 id:
                   type: string
-                  example: accessgroup01-0000-0000-0000-000000000000
-                propertyId:
-                  type: string
-                  example: prop0001-0000-0000-0000-000000000000
-                name:
-                  type: string
-                  example: DL01
-                timeZoneId:
-                  type: string
-                  example: timezone01-0000-0000-0000-000000000000
-                accessPointIds:
-                  type: array
-                  items:
-                    type: string
-                    example: 
-                    - point01-0000-0000-0000-000000000000
-                    - point02-0000-0000-0000-000000000000
-                    - point03-0000-0000-0000-000000000000
+                  example: timezone0001-0000-0000-0000-000000000000
               required:
-                - propertyId
-                - name
+                - id
       responses:
         '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    example: someid-of-partner-ecosystem-0001
+          $ref: '#/components/responses/Success'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
-  /<webhook:addAdvancedAccessGroupUrl>:
+          $ref: '#/components/responses/Unauthorized'
+
+  /<webhook:addOrUpdateAccessGroupUrl>:
     post:
       tags:
         - Webhook Operations
-      summary: External webhook for adding an advanced configuration access group to the partner
+      summary: External webhook for adding an access group to the partner of updating it if it already exists
+      parameters:
+        - $ref: '#/components/parameters/IntegrationIdHeader'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                id:
-                  type: string
-                  example: accessgroup01-0000-0000-0000-000000000000
-                propertyId:
-                  type: string
-                  example: prop0001-0000-0000-0000-000000000000
-                name:
-                  type: string
-                  example: DL01
-                accessPoints:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      accessPointId:
-                        type: string
-                        example: point01-0000-0000-0000-000000000000
-                      timeZoneIds:
-                        type: array
-                        items:
-                          type: string
-                          example: tz000001-0000-0000-0000-000000000000
-              required:
-                - propertyId
-                - name
+                $ref: '#/components/schemas/AccessGroup'
       responses:
         '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    example: someid-of-partner-ecosystem-0001
+          $ref: '#/components/responses/Success'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized'
+
   /<webhook:removeAccessGroupUrl>:
     post:
       tags:
         - Webhook Operations
       summary: External webhook for removing an access group from the partner
+      parameters:
+        - $ref: '#/components/parameters/IntegrationIdHeader'
       requestBody:
         required: true
         content:
@@ -568,42 +359,58 @@ paths:
             schema:
               type: object
               properties:
-                propertyId:
+                id:
                   type: string
-                  example: prop0001-0000-0000-0000-000000000000
-                accessGroupId:
-                  type: string
-                  example: accessgroup01-0000-0000-0000-000000000000
+                  example: accessgroup0001-0000-0000-0000-000000000000
               required:
-                - propertyId
-                - accessGroupId
+                - id
       responses:
         '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    example: someid-of-partner-ecosystem-0001
+          $ref: '#/components/responses/Success'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
-  
-  /<webhook:addUserUrl>:
+          $ref: '#/components/responses/Unauthorized'
+
+  /<webhook:addOrUpdateUserUrl>:
     post:
       tags:
         - Webhook Operations
       summary: External webhook for adding a user to the partner
+      parameters:
+        - $ref: '#/components/parameters/IntegrationIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - type: object
+                  properties:
+                    userId:
+                      type: string
+                      example: user0001-0000-0000-0000-000000000000
+                    accessGroups:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/UserAccessGroup'
+                    validFrom:
+                      type: string
+                      example: 2020-01-01T12:00:00.000
+                    validTill:
+                      type: string
+                      example: 2020-01-01T12:00:00.000
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /<webhook:removeUserUrl>:
+    post:
+      tags:
+        - Webhook Operations
+      summary: External webhook for removing a user from the partner
+      parameters:
+        - $ref: '#/components/parameters/IntegrationIdHeader'
       requestBody:
         required: true
         content:
@@ -614,327 +421,116 @@ paths:
                 id:
                   type: string
                   example: user0001-0000-0000-0000-000000000000
-                propertyId:
-                  type: string
-                  example: prop0001-0000-0000-0000-000000000000
-                username:
-                  type: string
-                  example: ACCN001347
-                email:
-                  type: string
-                  example: ACCN001347@upin.aeria.world
               required:
-                - propertyId
-                - username
-                - email
+                - id
       responses:
         '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    example: someid-of-partner-ecosystem-0001
+          $ref: '#/components/responses/Success'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
-
-  /<webhook:removeUserUrl>:
-    post:
-      tags:
-        - Webhook Operations
-      summary: External webhook for removing a user from the partner
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                propertyId:
-                  type: string
-                  example: prop0001-0000-0000-0000-000000000000
-                userId:
-                  type: string
-                  example: user01-0000-0000-0000-000000000000
-              required:
-                - propertyId
-                - userId
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    example: someid-of-partner-ecosystem-0001
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized'
 
   /<webhook:addUserIdentificationUrl>:
     post:
       tags:
         - Webhook Operations
       summary: External webhook for adding a user identification to the partner
+      parameters:
+        - $ref: '#/components/parameters/IntegrationIdHeader'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                propertyId:
-                  type: string
-                  example: prop0001-0000-0000-0000-000000000000
-                userId:
-                  type: string
-                  example: user01-0000-0000-0000-000000000000
-                identificationType:
-                  type: string
-                  enum:
-                    - pin
-                    - passcode
-                value:
-                  type: string
-                  example: 123456
-              required:
-                - propertyId
-                - userId
-                - identificationType
-                - value
+              allOf:
+                - type: object
+                  properties:
+                    userId:
+                      type: string
+                      example: user01-0000-0000-0000-000000000000
+                - $ref: '#/components/schemas/UserIdentificationWithValidity'
       responses:
         '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    example: someid-of-partner-ecosystem-0001
+          $ref: '#/components/responses/Success'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized'
 
   /<webhook:removeUserIdentificationUrl>:
     post:
       tags:
         - Webhook Operations
       summary: External webhook for removing a user identification from the partner
+      parameters:
+        - $ref: '#/components/parameters/IntegrationIdHeader'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                id:
-                  type: string
-                  example: someid-of-partner-ecosystem-0001
-              required:
-                - id
+              allOf:
+                - type: object
+                  properties:
+                    userId:
+                      type: string
+                      example: user01-0000-0000-0000-000000000000
+                - $ref: '#/components/schemas/UserIdentification'
       responses:
         '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    example: someid-of-partner-ecosystem-0001
+          $ref: '#/components/responses/Success'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string 
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized'
 
-  /<webhook:assignAccessGroupUrl>:
-    post:
+  /<webhook:getAllUserIdentificationsUrl>:
+    get:
       tags:
         - Webhook Operations
-      summary: External webhook for assigning an access group to a user
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                propertyId:
-                  type: string
-                  example: prop0001-0000-0000-0000-000000000000
-                accessGroupId:
-                  type: string
-                  example: accessgroup01-0000-0000-0000-000000000000
-                userId:
-                  type: string
-                  example: user01-0000-0000-0000-000000000000
-                dayOffIds:
-                  type: array
-                  items:
-                    type: string
-                    example: 
-                    - dayoff01-0000-0000-0000-000000000000
-                    - dayoff02-0000-0000-0000-000000000000
-                validFrom:
-                  type: string
-                  example: 2020-01-01
-                validTill:
-                  type: string
-                  example: 2020-01-01
-              required:
-                - propertyId
-                - accessGroupId
-                - userId
-                - validFrom
-                - validTill
+      summary: External webhook for getting all user identifications
+      parameters:
+        - $ref: '#/components/parameters/IntegrationIdHeader'
+        - in: query
+          name: userId
+          required: true
+          schema:
+            type: string
+            example: user01-0000-0000-0000-000000000000
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    example: someid-of-partner-ecosystem-0001
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserIdentificationWithValidity'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized'
 
-  /<webhook:revokeAccessGroupUrl>:
-    post:
+  /<webhook:getMovementLogsUrl>:
+    get:
       tags:
         - Webhook Operations
-      summary: External webhook for revoking an access group from a user
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                propertyId:
-                  type: string
-                  example: prop0001-0000-0000-0000-000000000000
-                accessGroupId:
-                  type: string
-                  example: accessgroup01-0000-0000-0000-000000000000
-                userId: 
-                  type: string
-                  example: user01-0000-0000-0000-000000000000
-              required:
-                - propertyId
-                - accessGroupId
-                - userId
+      summary: External webhook for getting access logs, will be called every 5-10 minutes to get the latest movements
+      parameters:
+        - $ref: '#/components/parameters/IntegrationIdHeader'
+        - in: query
+          name: startTime
+          required: true
+          schema:
+            type: string
+            example: 2020-01-01T12:00:00.000
+        - in: query
+          name: endTime
+          required: true
+          schema:
+            type: string
+            example: 2020-01-01T12:00:00.000
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    example: someid-of-partner-ecosystem-0001
+                type: array
+                items:
+                  $ref: '#/components/schemas/Movement'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
-  /<webhook:getIdentityQRUrl>:
-    post:
-      tags:
-        - Webhook Operations
-      summary: External webhook for getting an QR based access identity
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                userId:
-                  type: string
-                  example: prop0001-0000-0000-0000-000000000000
-                propertyId:
-                  type: string
-                  example: prop0001-0000-0000-0000-000000000000
-                expiry:
-                  type: string
-                  example: 2020-01-01T12:00:00.000
-              required:
-                - userId
-                - propertyId
-                - expiry
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  encryptedIdentity:
-                    type: string
-                    example: hashedEncryptedIdentityWithExpiry
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized'
