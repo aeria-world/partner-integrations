@@ -189,16 +189,37 @@ paths:
                   data:
                     type: object
                     required:
+                      - id
                       - entryTime
+                      - bay
+                      - category
                     properties:
+                      id:
+                        type: string
+                        example: 00000000-0000-0000-0000-000000000000
                       entryTime:
                         type: string
                         example: 2022-01-01T00:00:00Z
                       bay:
                         $ref: '#/components/schemas/Bay'
                       category: 
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                        example:
+                          id: 00000000-0000-0000-0000-000000000000
+                          name: Reserved
+                      pendingCollectionAmount:
+                        type: number
+                        example: 0
+                        description: The amount to be collected for the vehicle at the time of entry
+                      validTill:
                         type: string
-                        example: Reserved
+                        example: 2022-01-01T00:00:00Z
+                        description: The time till which this approval is valid. The bay is blocked for the vehicle till this time. Typically 2 minutes for each request.
         '410':
           description: Gone
           content:
@@ -274,6 +295,9 @@ paths:
                   data:
                     type: object
                     properties:
+                      id:
+                        type: string
+                        example: 00000000-0000-0000-0000-000000000000
                       entryTime:
                         type: string
                         example: 2022-01-01T00:00:00Z
@@ -289,6 +313,10 @@ paths:
                       categoryId:
                         type: string
                         example: 00000000-0000-0000-0000-000000000000
+                      validTill:
+                        type: string
+                        example: 2022-01-01T00:00:00Z
+                        description: The time till which the total fare is valid. This is the time till which the vehicle can exit without incurring any additional charges.
         '401':
           description: Unauthorized
           content:
@@ -322,6 +350,9 @@ paths:
               items:
                 type: object
                 properties:
+                  id:
+                    type: string
+                    example: 00000000-0000-0000-0000-000000000000
                   vehicleNo:
                     type: string
                     example: DL01AA0007
@@ -340,6 +371,19 @@ paths:
                   barrierId:
                     type: string
                     example: some-barrier-id
+                  collection:
+                    type: object
+                    properties:
+                      amount:
+                        type: number
+                        example: 100
+                        description: The amount that was collected from the vehicle at the time of entry or exit
+                      mode:
+                        type: string
+                        example: cash
+                        anyOf:
+                          - type: string
+                            enum: [ cash, card, upi, other ]
                 required:
                   - vehicleNo
                   - time
@@ -366,6 +410,80 @@ paths:
                   error:
                     type: string
                     example: Unauthorized access
+
+  /parking/v1/integration/{integrationId}/manual-exit:
+    post:
+      tags: 
+        - Parking Operations
+      summary: Api for manual exit of a vehicle
+      description: Api for manual exit of a vehicle
+      parameters:
+        - in: path
+          name: integrationId
+          required: true
+          schema:
+            type: string
+          description: The integration id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                vehicleNo:
+                  type: string
+                  example: DL01AA0007
+                entryTime:
+                  type: string
+                  example: 2022-01-01T00:00:00Z
+                exitTime:
+                  type: string
+                  example: 2022-01-01T02:00:00Z
+                remark:
+                  type: string
+                  example: "Manual exit"
+                barrierId:
+                  type: string
+                  example: some-barrier-id
+              required:
+                - vehicleNo
+                - entryTime
+                - exitTime
+                - barrierId
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: 00000000-0000-0000-0000-000000000000
+                      entryTime:
+                        type: string
+                        example: 2022-01-01T00:00:00Z
+                      exitTime:
+                        type: string
+                        example: 2022-01-01T02:00:00Z
+                      totalFare:
+                        type: number
+                        example: 100
+                      preCollectedFare:
+                        type: number
+                        example: 50
+                      validTill:
+                        type: string
+                        example: 2022-01-01T00:00:00Z
+                        description: The time till which the total fare is valid. This is the time till which the vehicle can exit without incurring any additional charges.
 
 # Webhook Operations
                     
