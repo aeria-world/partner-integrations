@@ -1,0 +1,267 @@
+openapi: 3.0.0
+info:
+  version: v1
+  title: Valet Deep Integration API's
+  description: Deep integration APIs for valet. Aeria handles the authorization
+    and price calculation, while the partner handles the valet operations.
+tags:
+  - name: Valet Operations
+    description: APIs For Valet Operations
+  - name: Webhook Operations
+    description: APIs For Webhook Operations
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Enter JWT token
+  parameters:
+    integrationHeader:
+      in: header
+      name: x-itegration-id
+      required: true
+      schema:
+        type: string
+    signatureHeader:
+      in: header
+      name: x-signature
+      required: true
+      schema:
+        type: string
+
+# Parking Operations
+
+paths:
+  /partner/v1/valet/service/request-vehicle-entry:
+    post:
+      tags:
+        - Valet Operations
+      summary: Request Vehicle Entry
+      description: Request Vehicle Entry
+      parameters:
+        - $ref: '#/components/parameters/integrationHeader'
+        - $ref: '#/components/parameters/signatureHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                registrationNumber:
+                  type: string
+                  example: DL01AB1234
+                vehicleType:
+                  type: string
+                  example: 4w
+                  enum:
+                    - 2w
+                    - 4w
+                valetPointId:
+                  type: string
+                  example: 00000000-0000-0000-0000-000000000000
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  serviceId:
+                    type: string
+                    example: 00000000-0000-0000-0000-000000000000
+                  isPrePaid:
+                    type: boolean
+  /partner/v1/valet/service/{serviceId}/request-vehicle-exit:
+    post:
+      tags:
+        - Valet Operations
+      summary: Request Vehicle Exit
+      description: Request Vehicle Exit
+      parameters:
+        - $ref: '#/components/parameters/integrationHeader'
+        - $ref: '#/components/parameters/signatureHeader'
+        - in: path
+          name: serviceId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                valetPointId:
+                  type: string
+                  example: 00000000-0000-0000-0000-000000000000
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pendingAmount:
+                    type: number
+  /valet/v1/service/{serviceId}:
+    get:
+      tags:
+        - Valet Operations
+      summary: Get Service Details
+      description: Get Service Details
+      parameters:
+        - $ref: '#/components/parameters/integrationHeader'
+        - $ref: '#/components/parameters/signatureHeader'
+        - in: path
+          name: serviceId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: IN_PROGRESS
+                  pendingAmount:
+                    type: number
+                  registrationNumber:
+                    type: string
+                  vehicleType:
+                    type: string
+                  checkInTime:
+                    type: string
+                    format: date-time
+                  checkOutTime:
+                    type: string
+                    format: date-time
+
+  /valet/v1/service/{serviceId}/update-status:
+    post:
+      tags:
+        - Valet Operations
+      summary: Update Service Status
+      description: Update Service Status
+      parameters:
+        - $ref: '#/components/parameters/integrationHeader'
+        - $ref: '#/components/parameters/signatureHeader'
+        - in: path
+          name: serviceId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+  /<webhook:update-service>:
+    post:
+      tags:
+        - Webhook Operations
+      summary: Service Update
+      description: Service Update
+      parameters:
+        - $ref: '#/components/parameters/integrationHeader'
+        - $ref: '#/components/parameters/signatureHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                serviceId:
+                  type: string
+                status:
+                  type: string
+                  example: IN_PROGRESS
+                pendingAmount:
+                  type: number
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+  /<webhook:get-status>:
+    get:
+      tags:
+        - Webhook Operations
+      summary: Get Status Update
+      description: Get Status Update
+      parameters:
+        - $ref: '#/components/parameters/integrationHeader'
+        - $ref: '#/components/parameters/signatureHeader'
+        - in: query
+          name: serviceId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: IN_PROGRESS # collected, parked, retrieving, handedover
+                  isPaid:
+                    type: boolean
+  /<webhook:retrieve-vehicle>:
+    post:
+      tags:
+        - Webhook Operations
+      summary: Retrieve Vehicle
+      description: Retrieve Vehicle
+      parameters:
+        - $ref: '#/components/parameters/integrationHeader'
+        - $ref: '#/components/parameters/signatureHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                serviceId:
+                  type: string
+                  example: 00000000-0000-0000-0000-000000000000
+                valetPointId:
+                  type: string
+                  example: 00000000-0000-0000-0000-000000000000
+                isPrePaid:
+                  type: boolean
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean

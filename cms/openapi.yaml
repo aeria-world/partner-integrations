@@ -1,0 +1,70 @@
+openapi: 3.0.0
+info:
+  version: v1
+  title: Punctualiti Integration API
+  description: API documentation for Punctualiti integration with Aeria forBrigade NXT
+
+tags:
+  - name: Webhook Operations
+    description: APIs for webhook operations
+
+components:
+  securitySchemes:
+    Authorization:
+      type: http
+      scheme: Bearer
+
+servers:
+  - url: https://facility.api.aeria.world
+    description: Aeria Facility API for Production
+  - url: https://staging-facility.api.aeria.world
+    description: Aeria Facility API for Staging
+
+paths:
+  /webhook/punctualiti/ticket-status:
+    post:
+      tags:
+        - Webhook Operations
+      summary: Webhook endpoint for ticket status updates
+      security:
+        - Authorization: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                referenceId:
+                  type: string
+                  example: "00000000-0000-0000-0000-000000000000"
+                ticketId:
+                  type: string
+                  example: "TK001"
+                status:
+                  type: string
+                  example: "IN_PROGRESS"
+                comment:
+                  type: string
+                  example: "Work in progress"
+      responses:
+        '200':
+          description: Webhook processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        '403':
+          description: Authorization failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Authorization failed"
