@@ -244,6 +244,16 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: IN_PROGRESS
       responses:
         '200':
           description: Ok
