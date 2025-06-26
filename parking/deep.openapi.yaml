@@ -10,12 +10,13 @@ tags:
     description: APIs For Webhook Operations
 
 components:
-  securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: Enter JWT token
+  parameters:
+    signatureHeader:
+      in: header
+      name: x-signature
+      required: true
+      schema:
+        type: string
   schemas:
     Vehicle:
       type: object
@@ -68,26 +69,18 @@ components:
         available:
           type: number
           example: 5
-    
-security: 
-  - BearerAuth: []
 
 # Parking Operations
   
 paths:
-  /parking/v1/integration/{integrationId}/category-availabilty:
+  /partner/v1/parking/category-availabilty:
     get:
       tags: 
         - Parking Operations
       summary: Api for getting category summary
       description: Api for getting category summary
       parameters:
-        - in: path
-          name: integrationId
-          required: true
-          schema:
-            type: string
-          description: The integration id
+        - $ref: '#/components/parameters/signatureHeader'
       responses:
         '200':
           description: Ok
@@ -148,19 +141,14 @@ paths:
                     type: string
                     example: Unauthorized access
 
-  /parking/v1/integration/{integrationId}/request-entry:
+  /partner/v1/parking/request-entry:
     post:
       tags: 
         - Parking Operations
       summary: Api for requesting entry of a vehicle
       description: Aeria will handle the authorization based category of the pre registered vehicle and the bay availability. For successful authorization, Aeria will send a bay detail to the partner that will be displayed on the screen at the entry
       parameters:
-        - in: path
-          name: integrationId
-          required: true
-          schema:
-            type: string
-          description: The integration id
+        - $ref: '#/components/parameters/signatureHeader'
       requestBody:
         required: true
         content:
@@ -253,19 +241,14 @@ paths:
                     type: string
                     example: Forbidden access
                     
-  /parking/v1/integration/{integrationId}/request-exit:
+  /partner/v1/parking/request-exit:
     post:
       tags: 
         - Parking Operations
       summary: Api for requesting exit of a vehicle
       description: Aeria will handle the authorization based on the pre registered vehicle and the exit time. For successful authorization, Aeria will send the fare details to the partner that will be displayed on the screen at the exit and collect the fare
       parameters:
-        - in: path
-          name: integrationId
-          required: true
-          schema:
-            type: string
-          description: The integration id
+        - $ref: '#/components/parameters/signatureHeader'
       requestBody:
         required: true
         content:
@@ -328,19 +311,14 @@ paths:
                     type: string
                     example: Unauthorized access
 
-  /parking/v1/integration/{integrationId}/movement-logs:
+  /partner/v1/parking/movement-logs:
     post:
       tags: 
         - Parking Operations
       summary: Log the entry and exit of a vehicle
       description: Partner will log the entry and exit of a vehicle that was allowed offline
       parameters:
-        - in: path
-          name: integrationId
-          required: true
-          schema:
-            type: string
-          description: The integration id
+        - $ref: '#/components/parameters/signatureHeader'
       requestBody:
         required: true
         content:
@@ -411,19 +389,14 @@ paths:
                     type: string
                     example: Unauthorized access
 
-  /parking/v1/integration/{integrationId}/manual-exit:
+  /partner/v1/parking/manual-exit:
     post:
       tags: 
         - Parking Operations
       summary: Api for manual exit of a vehicle
       description: Api for manual exit of a vehicle
       parameters:
-        - in: path
-          name: integrationId
-          required: true
-          schema:
-            type: string
-          description: The integration id
+        - $ref: '#/components/parameters/signatureHeader'
       requestBody:
         required: true
         content:
@@ -493,6 +466,8 @@ paths:
         - Webhook Operations
       summary: Allow entry of a vehicle at the barrier
       description: Aeria will send a request to the partner to allow entry of a vehicle at the barrier
+      parameters:
+        - $ref: '#/components/parameters/signatureHeader'
       requestBody:
         required: true
         content:
@@ -540,6 +515,8 @@ paths:
         - Webhook Operations
       summary: Allow exit of a vehicle at the barrier
       description: Aeria will send a request to the partner to allow exit of a vehicle at the barrier
+      parameters:
+        - $ref: '#/components/parameters/signatureHeader'
       requestBody:
         required: true
         content:
@@ -598,6 +575,8 @@ paths:
         - Webhook Operations
       summary: Add a user to the whitelist, update the registration numbers and parallel entries if already present
       description: Aeria will send a request to the partner to add a user to the whitelist
+      parameters:
+        - $ref: '#/components/parameters/signatureHeader'
       requestBody:
         required: true
         content:
@@ -664,6 +643,8 @@ paths:
         - Webhook Operations
       summary: Add a user to the whitelist for flexi parking
       description: Aeria will send a request to the partner to add a user to the whitelist
+      parameters:
+        - $ref: '#/components/parameters/signatureHeader'
       requestBody:
         required: true
         content:
@@ -733,6 +714,8 @@ paths:
         - Webhook Operations
       summary: Remove a user from the whitelist
       description: Aeria will send a request to the partner to remove a user from the whitelist
+      parameters:
+        - $ref: '#/components/parameters/signatureHeader'
       requestBody:
         required: true
         content:
@@ -777,6 +760,8 @@ paths:
         - Webhook Operations
       summary: Add a booking for a user
       description: Aeria will send a request to the partner to add a booking for a user
+      parameters:
+        - $ref: '#/components/parameters/signatureHeader'
       requestBody:
         required: true
         content:
@@ -845,6 +830,8 @@ paths:
         - Webhook Operations
       summary: Remove a booking for a user
       description: Aeria will send a request to the partner to remove a booking for a user
+      parameters:
+        - $ref: '#/components/parameters/signatureHeader'
       requestBody:
         required: true
         content:
@@ -890,6 +877,7 @@ paths:
       summary: Get the logs of the integration
       description: Aeria will send a request to the partner to get the logs of the integration
       parameters:
+        - $ref: '#/components/parameters/signatureHeader'
         - in: query
           name: integrationId
           required: true

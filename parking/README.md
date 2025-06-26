@@ -42,15 +42,27 @@ This document provides guidance on integrating external parking solutions with A
 
 ### Signing Requests with Secret Key:
 
-For enhanced security, Aeria requires you to sign every request sent to their API with your Datapath Secret Key. Here's the signing process:
+For enhanced security, Aeria requires you to sign every request sent to their API with your Secret Key. Here's the signing process:
 
-1. Include your Partner ID (PID) in the request header with the key `x-partner-code`. This helps Aeria identify your account.
-2. Deep sort the params and body data alphabetically.
-3. Generate a hash of the JSON stringified data of the format `{params: {[key: string]: string}, body: {[key: string]: any}}` using the bcrypt hashing algorithm.
-4. Encrypt the hash using the Crypto.AES encryption algorithm with secret key.
-5. Include this encrypted hash in the request header with the key `x-signature`.
+1. Generate an x-signature using the following format: `${integrationId}.${timestamp}.${hash}`
+   - Sort all JSON keys alphabetically before stringifying
+   - Concatenate the JSON stringified body with the current timestamp in milliseconds
+   - Generate an HMAC-SHA256 hash of the concatenated string using your secret key
+   - Format: `integrationId.timestamp.hmacHash`
+2. Include this signature in the request header with the key `x-signature`.
 
-> **Note**: Aeria follows the same signing request steps when calling any webhook with the webhook secret key, ensuring secure communication between systems.
+**Example signature generation:**
+```javascript
+const crypto = require('crypto');
+const timestamp = Date.now();
+const sortedBody = sortObjectKeys(requestBody);
+const jsonBody = JSON.stringify(sortedBody);
+const dataToHash = jsonBody + timestamp;
+const hash = crypto.createHmac('sha256', secretKey).update(dataToHash).digest('hex');
+const signature = `${integrationId}.${timestamp}.${hash}`;
+```
+
+> **Note**: Aeria follows the same signing process when calling webhooks, using the webhook secret key. Signature utilities are available in multiple programming languages in the `/signature-utils` directory.
 
 # Conclusion
 

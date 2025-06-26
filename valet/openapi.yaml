@@ -11,19 +11,7 @@ tags:
     description: APIs For Webhook Operations
 
 components:
-  securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: Enter JWT token
   parameters:
-    integrationHeader:
-      in: header
-      name: x-itegration-id
-      required: true
-      schema:
-        type: string
     signatureHeader:
       in: header
       name: x-signature
@@ -34,14 +22,42 @@ components:
 # Parking Operations
 
 paths:
-  /partner/v1/valet/service/request-vehicle-entry:
+  /partner/v1/valet/valet-points:
+    get:
+      tags:
+        - Valet Operations
+      summary: Get Valet Points
+      description: Get Valet Points
+      parameters:
+        - $ref: '#/components/parameters/signatureHeader'
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    name:
+                      type: string
+                    address:
+                      type: string
+                    coordinates:
+                      type: string
+                    status:
+                      type: string
+                      
+  /partner/v1/valet/service/request-entry:
     post:
       tags:
         - Valet Operations
       summary: Request Vehicle Entry
       description: Request Vehicle Entry
       parameters:
-        - $ref: '#/components/parameters/integrationHeader'
         - $ref: '#/components/parameters/signatureHeader'
       requestBody:
         required: true
@@ -75,14 +91,13 @@ paths:
                     example: 00000000-0000-0000-0000-000000000000
                   isPrePaid:
                     type: boolean
-  /partner/v1/valet/service/{serviceId}/request-vehicle-exit:
+  /partner/v1/valet/service/{serviceId}/request-exit:
     post:
       tags:
         - Valet Operations
       summary: Request Vehicle Exit
       description: Request Vehicle Exit
       parameters:
-        - $ref: '#/components/parameters/integrationHeader'
         - $ref: '#/components/parameters/signatureHeader'
         - in: path
           name: serviceId
@@ -116,7 +131,6 @@ paths:
       summary: Get Service Details
       description: Get Service Details
       parameters:
-        - $ref: '#/components/parameters/integrationHeader'
         - $ref: '#/components/parameters/signatureHeader'
         - in: path
           name: serviceId
@@ -154,7 +168,6 @@ paths:
       summary: Update Service Status
       description: Update Service Status
       parameters:
-        - $ref: '#/components/parameters/integrationHeader'
         - $ref: '#/components/parameters/signatureHeader'
         - in: path
           name: serviceId
@@ -171,6 +184,7 @@ paths:
                 properties:
                   success:
                     type: boolean
+
   /<webhook:update-service>:
     post:
       tags:
@@ -178,7 +192,6 @@ paths:
       summary: Service Update
       description: Service Update
       parameters:
-        - $ref: '#/components/parameters/integrationHeader'
         - $ref: '#/components/parameters/signatureHeader'
       requestBody:
         required: true
@@ -211,7 +224,6 @@ paths:
       summary: Get Status Update
       description: Get Status Update
       parameters:
-        - $ref: '#/components/parameters/integrationHeader'
         - $ref: '#/components/parameters/signatureHeader'
         - in: query
           name: serviceId
@@ -231,6 +243,7 @@ paths:
                     example: IN_PROGRESS # collected, parked, retrieving, handedover
                   isPaid:
                     type: boolean
+
   /<webhook:retrieve-vehicle>:
     post:
       tags:
@@ -238,7 +251,6 @@ paths:
       summary: Retrieve Vehicle
       description: Retrieve Vehicle
       parameters:
-        - $ref: '#/components/parameters/integrationHeader'
         - $ref: '#/components/parameters/signatureHeader'
       requestBody:
         required: true

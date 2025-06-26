@@ -1,0 +1,17 @@
+{
+  "name": "signature-utils-typescript",
+  "version": "1.0.0",
+  "description": "TypeScript signature generation and validation utilities for partner integrations",
+  "main": "typescript.js",
+  "scripts": {
+    "build": "tsc typescript.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["signature", "hmac", "integration", "authentication", "typescript"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}

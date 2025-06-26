@@ -1,0 +1,60 @@
+{
+  "testCases": [
+    {
+      "name": "Simple object",
+      "body": {
+        "userId": "12345",
+        "action": "create_booking"
+      },
+      "integrationId": "test-integration-1",
+      "secretKey": "test-secret-key-123",
+      "fixedTimestamp": 1703097600000
+    },
+    {
+      "name": "Complex nested object",
+      "body": {
+        "user": {
+          "id": "67890",
+          "name": "John Doe",
+          "preferences": {
+            "notifications": true,
+            "theme": "dark"
+          }
+        },
+        "booking": {
+          "location": "parking_lot_a",
+          "duration": 120,
+          "features": ["covered", "electric_charging"]
+        },
+        "metadata": {
+          "source": "mobile_app",
+          "version": "2.1.0"
+        }
+      },
+      "integrationId": "test-integration-2",
+      "secretKey": "another-secret-key-456",
+      "fixedTimestamp": 1703097660000
+    },
+    {
+      "name": "Array with mixed types",
+      "body": {
+        "items": [
+          {"id": 1, "name": "Item A"},
+          {"id": 2, "name": "Item B"},
+          {"id": 3, "name": "Item C"}
+        ],
+        "total": 3,
+        "active": true,
+        "tags": ["important", "urgent", "priority"]
+      },
+      "integrationId": "test-integration-3",
+      "secretKey": "third-secret-key-789",
+      "fixedTimestamp": 1703097720000
+    }
+  ],
+  "expectedSignatures": {
+    "test-integration-1": "test-integration-1.1703097600000.a1b2c3d4e5f6",
+    "test-integration-2": "test-integration-2.1703097660000.f6e5d4c3b2a1",
+    "test-integration-3": "test-integration-3.1703097720000.123456789abc"
+  }
+}

@@ -1,0 +1,7 @@
+# Python dependencies for signature utilities
+# No external dependencies required - uses standard library modules:
+# - json (built-in)
+# - time (built-in) 
+# - hmac (built-in)
+# - hashlib (built-in)
+# - typing (built-in for Python 3.5+)
