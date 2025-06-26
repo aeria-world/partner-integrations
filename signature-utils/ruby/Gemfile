@@ -1,0 +1,12 @@
+source 'https://rubygems.org'
+
+ruby '>= 2.5.0'
+
+# No external gems required - uses Ruby standard library
+# gem 'openssl' # Built-in
+# gem 'json'    # Built-in
+
+group :development, :test do
+  gem 'rspec', '~> 3.12'
+  gem 'rubocop', '~> 1.50'
+end

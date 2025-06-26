@@ -1,0 +1,19 @@
+{
+  "name": "signature-utils",
+  "version": "1.0.0",
+  "description": "Signature generation and validation utilities for partner integrations",
+  "main": "javascript.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["signature", "hmac", "integration", "authentication"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@types/crypto-js": "^4.1.1"
+  }
+}
