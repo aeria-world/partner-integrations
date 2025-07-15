@@ -89,7 +89,6 @@ components:
           anyOf:
             - type: string
               enum: [ cash, card, upi, other ]
-
     ExitData:
       type: object
       properties:
@@ -115,7 +114,82 @@ components:
           type: string
           example: 2022-01-01T00:00:00Z
           description: The time till which the total fare is valid. This is the time till which the vehicle can exit without incurring any additional charges.
-      
+    IntegrationNotFound:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 422
+        response:
+          type: object
+          properties:
+            message:
+              type: string
+              example: integration not found
+            code:
+              type: integer
+              example: 713
+    BarrierNotFound:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 422
+        response:
+          type: object
+          properties:
+            message:
+              type: string
+              example: barrier not found
+            code:
+              type: integer
+              example: 403
+    NoBayAvailable:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 406
+        response:
+          type: object
+          properties:
+            message:
+              type: string
+              example: No bay available
+            code:
+              type: integer
+              example: 710
+    NoParkingFound:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 406
+        response:
+          type: object
+          properties:
+            message:
+              type: string
+              example: No parking found for the integration
+            code:
+              type: integer
+              example: 711
+    VehicleNotWhitelisted:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 406
+        response:
+          type: object
+          properties:
+            message:
+              type: string
+              example: Vehicle is not whitelisted
+            code:
+              type: integer
+              example: 712
+
   responses:
     Success:
       description: OK
@@ -158,25 +232,6 @@ components:
                   code:
                     type: integer
                     example: 401
-    IntegrationNotFound:
-      description: Integration not found
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              statusCode:
-                type: integer
-                example: 402
-              response:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: integration not found
-                  code:
-                    type: integer
-                    example: 402
     Forbidden:
       description: Forbidden
       content:
@@ -196,82 +251,6 @@ components:
                   code:
                     type: integer
                     example: 403
-    BarrierNotFound:
-      description: Barrier not found
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              statusCode:
-                type: integer
-                example: 408
-              response:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Barrier not found
-                  code:
-                    type: integer
-                    example: 408
-    NoBayAvailable:
-      description: No bay available
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              statusCode:
-                type: integer
-                example: 410
-              response:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: No bay available
-                  code:
-                    type: integer
-                    example: 410
-    NoParkingFound:
-      description: No parking found for the integration
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              statusCode:
-                type: integer
-                example: 405
-              response:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: No parking found for the integration
-                  code:
-                    type: integer
-                    example: 405
-    VehicleNotWhitelisted:
-      description: Vehicle is not whitelisted
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              statusCode:
-                type: integer
-                example: 406
-              response:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Vehicle is not whitelisted
-                  code:
-                    type: integer
-                    example: 406
     InternalServerError:
       description: Internal Server Error
       content:
@@ -291,8 +270,23 @@ components:
                   code:
                     type: integer
                     example: 500
-
-# Parking Operations
+    UnprocessableContent:
+      description: Unprocessable Content
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/IntegrationNotFound'
+              - $ref: '#/components/schemas/BarrierNotFound'
+    DataNotFound:
+      description: Data not found
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/NoBayAvailable'
+              - $ref: '#/components/schemas/NoParkingFound'
+              - $ref: '#/components/schemas/VehicleNotWhitelisted'
   
 paths:
   /partner/v1/parking/category-availabilty:
@@ -353,8 +347,8 @@ paths:
                       defaultVisitorCategoryId: 00000000-0000-0000-0000-000000000001
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '402': 
-          $ref: '#/components/responses/IntegrationNotFound'
+        '422': 
+          $ref: '#/components/responses/UnprocessableContent'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -420,18 +414,14 @@ paths:
                         type: string
                         example: 2022-01-01T00:00:00Z
                         description: The time till which this approval is valid. The bay is blocked for the vehicle till this time. Typically 2 minutes for each request.
-        '410':
-          $ref: '#/components/responses/NoBayAvailable'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '402':
-          $ref: '#/components/responses/IntegrationNotFound'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '405':
-          $ref: '#/components/responses/NoParkingFound'
         '406':
-          $ref: '#/components/responses/VehicleNotWhitelisted'
+          $ref: '#/components/responses/DataNotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
         '500':
           $ref: '#/components/responses/InternalServerError'
                     
@@ -473,8 +463,8 @@ paths:
                     $ref: '#/components/schemas/ExitData'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '402':
-          $ref: '#/components/responses/IntegrationNotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -558,12 +548,10 @@ paths:
                               description: registration number
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '402':
-          $ref: '#/components/responses/IntegrationNotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '408': 
-          $ref: '#/components/responses/BarrierNotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -615,10 +603,8 @@ paths:
                     example: Success
                   data:
                     $ref: '#/components/schemas/ExitData'
-        '408':
-          $ref: '#/components/responses/BarrierNotFound'
-        '402':
-          $ref: '#/components/responses/IntegrationNotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
         '500':
           $ref: '#/components/responses/InternalServerError'
   
