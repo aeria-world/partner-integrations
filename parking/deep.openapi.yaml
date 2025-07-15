@@ -89,37 +89,7 @@ components:
           anyOf:
             - type: string
               enum: [ cash, card, upi, other ]
-    MovementLog:
-      type: object
-      properties:
-        id:
-          type: string
-          example: 00000000-0000-0000-0000-000000000000
-        vehicleNo:
-          type: string
-          example: DL01AA0007
-        time:
-          type: string
-          example: 2022-01-01T00:00:00Z
-        type:
-          type: string
-          example: entry
-          anyOf:
-            - type: string
-              enum: [ entry, exit ]
-        categoryId:
-          type: string
-          example: 00000000-0000-0000-0000-000000000000
-        barrierId:
-          type: string
-          example: some-barrier-id
-        collection:
-          $ref: '#/components/schemas/Collection'
-      required:
-        - vehicleNo
-        - time
-        - type
-        - categoryId
+
     ExitData:
       type: object
       properties:
@@ -145,35 +115,7 @@ components:
           type: string
           example: 2022-01-01T00:00:00Z
           description: The time till which the total fare is valid. This is the time till which the vehicle can exit without incurring any additional charges.
-    LogEntry:
-      type: object
-      properties:
-        registrationNumber:
-          type: string
-          example: MH01AB1234
-        time:
-          type: string
-          example: 2022-01-01T00:00:00Z
-        type:
-          type: string
-          example: entry
-          anyOf:
-            - type: string
-              enum: [ entry, exit ]
-        categoryId:
-          type: string
-          example: 00000000-0000-0000-0000-000000000000
-    MovementLogResponseItem:
-      type: object
-      properties:
-        id:
-          type: string
-          example: 00000000-0000-0000-0000-000000000000
-          description: vehicle log id
-        registrationNumber:
-          type: string
-          example: 1234567890
-          description: registration number
+      
   responses:
     Success:
       description: OK
@@ -551,7 +493,36 @@ paths:
             schema:
               type: array
               items:
-                $ref: '#/components/schemas/MovementLog'
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: 00000000-0000-0000-0000-000000000000
+                  vehicleNo:
+                    type: string
+                    example: DL01AA0007
+                  time:
+                    type: string
+                    example: 2022-01-01T00:00:00Z
+                  type:
+                    type: string
+                    example: entry
+                    anyOf:
+                      - type: string
+                        enum: [ entry, exit ]
+                  categoryId:
+                    type: string
+                    example: 00000000-0000-0000-0000-000000000000
+                  barrierId:
+                    type: string
+                    example: some-barrier-id
+                  collection:
+                    $ref: '#/components/schemas/Collection'
+                required:
+                  - vehicleNo
+                  - time
+                  - type
+                  - categoryId
       responses:
         '200':
           description: OK
@@ -575,7 +546,16 @@ paths:
                       data:
                         type: array
                         items:
-                          $ref: '#/components/schemas/MovementLogResponseItem'
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              example: 00000000-0000-0000-0000-000000000000
+                              description: vehicle log id
+                            registrationNumber:
+                              type: string
+                              example: MH01AB1234
+                              description: registration number
         '401':
           $ref: '#/components/responses/Unauthorized'
         '402':
@@ -984,6 +964,22 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/LogEntry'
+                      type: object
+                      properties:
+                        registrationNumber:
+                          type: string
+                          example: MH01AB1234
+                        time:
+                          type: string
+                          example: 2022-01-01T00:00:00Z
+                        type:
+                          type: string
+                          example: entry
+                          anyOf:
+                            - type: string
+                              enum: [ entry, exit ]
+                        categoryId:
+                          type: string
+                          example: 00000000-0000-0000-0000-000000000000
         '401':
           $ref: '#/components/responses/Unauthorized' 
