@@ -69,8 +69,230 @@ components:
         available:
           type: number
           example: 5
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    Collection:
+      type: object
+      properties:
+        amount:
+          type: number
+          example: 100
+          description: The amount that was collected from the vehicle at the time of entry or exit
+        mode:
+          type: string
+          example: cash
+          anyOf:
+            - type: string
+              enum: [ cash, card, upi, other ]
+    ExitData:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 00000000-0000-0000-0000-000000000000
+        entryTime:
+          type: string
+          example: 2022-01-01T00:00:00Z
+        exitTime:
+          type: string
+          example: 2022-01-01T02:00:00Z
+        totalFare:
+          type: number
+          example: 100
+        preCollectedFare:
+          type: number
+          example: 50
+        categoryId:
+          type: string
+          example: 00000000-0000-0000-0000-000000000000
+        validTill:
+          type: string
+          example: 2022-01-01T00:00:00Z
+          description: The time till which the total fare is valid. This is the time till which the vehicle can exit without incurring any additional charges.
+    IntegrationNotFound:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 422
+        response:
+          type: object
+          properties:
+            message:
+              type: string
+              example: integration not found
+            code:
+              type: integer
+              example: 710
+    BarrierNotFound:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 422
+        response:
+          type: object
+          properties:
+            message:
+              type: string
+              example: barrier not found
+            code:
+              type: integer
+              example: 711
+    NoBayAvailable:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 410
+        response:
+          type: object
+          properties:
+            message:
+              type: string
+              example: No bay available
+            code:
+              type: integer
+              example: 712
+    NoParkingFound:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 406
+        response:
+          type: object
+          properties:
+            message:
+              type: string
+              example: No parking found for the integration
+            code:
+              type: integer
+              example: 713
+    VehicleNotWhitelisted:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 406
+        response:
+          type: object
+          properties:
+            message:
+              type: string
+              example: Vehicle is not whitelisted
+            code:
+              type: integer
+              example: 714
 
-# Parking Operations
+  responses:
+    Success:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: integer
+                example: 200
+              response:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: integer
+                example: 401
+              response:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Unauthorized access
+                  code:
+                    type: integer
+                    example: 401
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: integer
+                example: 403
+              response:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Forbidden access
+                  code:
+                    type: integer
+                    example: 403
+    InternalServerError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: integer
+                example: 500
+              response:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Internal Server Error
+                  code:
+                    type: integer
+                    example: 500
+    UnprocessableContent:
+      description: Unprocessable Content
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/IntegrationNotFound'
+              - $ref: '#/components/schemas/BarrierNotFound'
+    DataNotFound:
+      description: Data not found
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/NoParkingFound'
+              - $ref: '#/components/schemas/VehicleNotWhitelisted'
+
+    NoBayAvailable:
+      description: No bay available
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: integer
+                example: 410
+              response:
+                $ref: '#/components/schemas/NoBayAvailable'
   
 paths:
   /partner/v1/parking/category-availabilty:
@@ -129,17 +351,12 @@ paths:
                             total: 10
                             available: 5
                       defaultVisitorCategoryId: 00000000-0000-0000-0000-000000000001
-                        
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized'
+        '422': 
+          $ref: '#/components/responses/UnprocessableContent'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
   /partner/v1/parking/request-entry:
     post:
@@ -191,12 +408,7 @@ paths:
                       bay:
                         $ref: '#/components/schemas/Bay'
                       category: 
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                          name:
-                            type: string
+                        $ref: '#/components/schemas/Category'
                         example:
                           id: 00000000-0000-0000-0000-000000000000
                           name: Reserved
@@ -208,38 +420,18 @@ paths:
                         type: string
                         example: 2022-01-01T00:00:00Z
                         description: The time till which this approval is valid. The bay is blocked for the vehicle till this time. Typically 2 minutes for each request.
-        '410':
-          description: Gone
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: 'No bay available'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                description: If x-partner-id is not present in the header or is invalid
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                type: object
-                description: The partner is not authorized to access the site
-                properties:
-                  error:
-                    type: string
-                    example: Forbidden access
+          $ref: '#/components/responses/Forbidden'
+        '406':
+          $ref: '#/components/responses/DataNotFound'
+        '410':
+          $ref: '#/components/responses/NoBayAvailable'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
                     
   /partner/v1/parking/request-exit:
     post:
@@ -276,40 +468,13 @@ paths:
                     type: string
                     example: Success
                   data:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        example: 00000000-0000-0000-0000-000000000000
-                      entryTime:
-                        type: string
-                        example: 2022-01-01T00:00:00Z
-                      exitTime:
-                        type: string
-                        example: 2022-01-01T02:00:00Z
-                      totalFare:
-                        type: number
-                        example: 100
-                      preCollectedFare:
-                        type: number
-                        example: 50
-                      categoryId:
-                        type: string
-                        example: 00000000-0000-0000-0000-000000000000
-                      validTill:
-                        type: string
-                        example: 2022-01-01T00:00:00Z
-                        description: The time till which the total fare is valid. This is the time till which the vehicle can exit without incurring any additional charges.
+                    $ref: '#/components/schemas/ExitData'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
   /partner/v1/parking/movement-logs:
     post:
@@ -350,18 +515,7 @@ paths:
                     type: string
                     example: some-barrier-id
                   collection:
-                    type: object
-                    properties:
-                      amount:
-                        type: number
-                        example: 100
-                        description: The amount that was collected from the vehicle at the time of entry or exit
-                      mode:
-                        type: string
-                        example: cash
-                        anyOf:
-                          - type: string
-                            enum: [ cash, card, upi, other ]
+                    $ref: '#/components/schemas/Collection'
                 required:
                   - vehicleNo
                   - time
@@ -375,19 +529,39 @@ paths:
               schema:
                 type: object
                 properties:
-                  message:
-                    type: string
-                    example: Success
+                  statusCode:
+                    type: integer
+                    example: 200
+                  response:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Success
+                      code:
+                        type: integer
+                        example: 0
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              example: 00000000-0000-0000-0000-000000000000
+                              description: vehicle log id
+                            registrationNumber:
+                              type: string
+                              example: MH01AB1234
+                              description: registration number
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
   /partner/v1/parking/manual-exit:
     post:
@@ -436,28 +610,12 @@ paths:
                     type: string
                     example: Success
                   data:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        example: 00000000-0000-0000-0000-000000000000
-                      entryTime:
-                        type: string
-                        example: 2022-01-01T00:00:00Z
-                      exitTime:
-                        type: string
-                        example: 2022-01-01T02:00:00Z
-                      totalFare:
-                        type: number
-                        example: 100
-                      preCollectedFare:
-                        type: number
-                        example: 50
-                      validTill:
-                        type: string
-                        example: 2022-01-01T00:00:00Z
-                        description: The time till which the total fare is valid. This is the time till which the vehicle can exit without incurring any additional charges.
-
+                    $ref: '#/components/schemas/ExitData'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  
 # Webhook Operations
                     
   /<webhook:allowEntry>:
@@ -489,25 +647,9 @@ paths:
                 - validTill
       responses:
         '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Success
+          $ref: '#/components/responses/Success'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized'
 
   /<webhook:allowExit>:
     post:
@@ -549,25 +691,9 @@ paths:
                 - validTill
       responses:
         '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Success
+          $ref: '#/components/responses/Success'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized'
   
   /<webhook:addWhitelistReservedUser>:
     post:
@@ -617,25 +743,9 @@ paths:
                 - bay
       responses:
         '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Success
+          $ref: '#/components/responses/Success'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized'
   
   /<webhook:addWhitelistFlexiUser>:
     post:
@@ -688,25 +798,9 @@ paths:
                 - flexiCategoryIds
       responses:
         '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Success
+          $ref: '#/components/responses/Success'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized'
   
   /<webhook:removeWhitelistUser>:
     post:
@@ -734,25 +828,9 @@ paths:
                 - userId
       responses:
         '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Success
+          $ref: '#/components/responses/Success'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized'
   
   /<webhook:addBooking>:
     post:
@@ -804,25 +882,9 @@ paths:
                 - bay
       responses:
         '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Success
+          $ref: '#/components/responses/Success'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized'
   
   /<webhook:removeBooking>:
     post:
@@ -850,25 +912,9 @@ paths:
                 - bookingId
       responses:
         '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Success
+          $ref: '#/components/responses/Success'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized'
 
   /<webhook:getLogs>:
     get:
@@ -930,12 +976,4 @@ paths:
                           type: string
                           example: 00000000-0000-0000-0000-000000000000
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Unauthorized access
+          $ref: '#/components/responses/Unauthorized' 
