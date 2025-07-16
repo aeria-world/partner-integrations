@@ -128,7 +128,7 @@ components:
               example: integration not found
             code:
               type: integer
-              example: 713
+              example: 710
     BarrierNotFound:
       type: object
       properties:
@@ -143,13 +143,13 @@ components:
               example: barrier not found
             code:
               type: integer
-              example: 403
+              example: 711
     NoBayAvailable:
       type: object
       properties:
         statusCode:
           type: integer
-          example: 406
+          example: 410
         response:
           type: object
           properties:
@@ -158,7 +158,7 @@ components:
               example: No bay available
             code:
               type: integer
-              example: 710
+              example: 712
     NoParkingFound:
       type: object
       properties:
@@ -173,7 +173,7 @@ components:
               example: No parking found for the integration
             code:
               type: integer
-              example: 711
+              example: 713
     VehicleNotWhitelisted:
       type: object
       properties:
@@ -188,7 +188,7 @@ components:
               example: Vehicle is not whitelisted
             code:
               type: integer
-              example: 712
+              example: 714
 
   responses:
     Success:
@@ -207,12 +207,6 @@ components:
                   message:
                     type: string
                     example: Success
-                  code:
-                    type: integer
-                    example: 0
-                  data:
-                    type: array
-                    items: {}
     Unauthorized:
       description: Unauthorized
       content:
@@ -284,9 +278,21 @@ components:
         application/json:
           schema:
             oneOf:
-              - $ref: '#/components/schemas/NoBayAvailable'
               - $ref: '#/components/schemas/NoParkingFound'
               - $ref: '#/components/schemas/VehicleNotWhitelisted'
+
+    Gone:
+      description: Gone
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: integer
+                example: 410
+              response:
+                $ref: '#/components/schemas/NoBayAvailable'
   
 paths:
   /partner/v1/parking/category-availabilty:
@@ -420,6 +426,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '406':
           $ref: '#/components/responses/DataNotFound'
+        '410':
+          $ref: '#/components/responses/Gone'
         '422':
           $ref: '#/components/responses/UnprocessableContent'
         '500':
