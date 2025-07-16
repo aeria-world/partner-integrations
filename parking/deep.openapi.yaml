@@ -281,8 +281,8 @@ components:
               - $ref: '#/components/schemas/NoParkingFound'
               - $ref: '#/components/schemas/VehicleNotWhitelisted'
 
-    Gone:
-      description: Gone
+    NoBayAvailable:
+      description: No bay available
       content:
         application/json:
           schema:
@@ -427,7 +427,7 @@ paths:
         '406':
           $ref: '#/components/responses/DataNotFound'
         '410':
-          $ref: '#/components/responses/Gone'
+          $ref: '#/components/responses/NoBayAvailable'
         '422':
           $ref: '#/components/responses/UnprocessableContent'
         '500':
