@@ -1,0 +1,355 @@
+openapi: 3.0.0
+info:
+  version: v1
+  title: External Carpooling PWA Integration API
+  description: |
+    Can integrate any 3rd party carpooling solution with our system through a Progressive Web App (PWA) integration.
+
+    **Integration Model**: Progressive Web App (PWA) with JWT-based authentication
+
+    **Key Features**:
+    - Single sign-on for verified corporate employees
+    - JWT tokens signed by Aeria (partners validate using provided public key)
+    - Privacy-first data sharing (company name only by default)
+    - Event-based system (notifications sent based on configured triggers)
+    - Optional JavaScript Bridge for enhanced communication
+
+    **Credentials Provided**:
+    - Partner ID (PID)
+    - Secret Key (for API request signatures)
+    - JWT Public Key (for validating JWT tokens)
+
+    **Full Integration Guide**: <a href='https://github.com/aeria-world/partner-integrations/blob/main/carpooling/README.md'>Documentation</a>
+
+tags:
+  - name: Carpooling Operations
+    description: APIs for carpooling service operations
+  - name: Event Operations
+    description: APIs for triggering events on Aeria backend
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token signed by Aeria using RS256 algorithm.
+        Partners must validate the token using the provided JWT public key.
+    
+  parameters:
+    signatureHeader:
+      in: header
+      name: x-signature
+      required: true
+      description: |
+        Request signature in format: ${integrationId}.${timestamp}.${hash}
+        Generated using HMAC-SHA256 of (JSON body + timestamp) with secret key
+      schema:
+        type: string
+        example: "integration-uuid.1699876543000.a1b2c3d4e5f6..."
+    
+    integrationIdHeader:
+      in: header
+      name: x-integration-id
+      required: true
+      description: Unique integration identifier for the tenant
+      schema:
+        type: string
+        example: "integration-0001-0000-0000-0000-000000000000"
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Invalid request"
+        message:
+          type: string
+          example: "Missing required field: userId"
+        code:
+          type: string
+          example: "VALIDATION_ERROR"
+    
+    UserContext:
+      type: object
+      properties:
+        userId:
+          type: string
+          description: User identifier (UUID)
+          example: "user-uuid-1234"
+        userName:
+          type: string
+          description: UPIN digits for user identification
+          example: "1234567890"
+        organisation:
+          type: object
+          description: Organisation details
+          properties:
+            id:
+              type: string
+              description: Organisation identifier (UUID)
+              example: "org-uuid-5678"
+            name:
+              type: string
+              description: Organisation/company name
+              example: "Company Name"
+    
+    EventPayload:
+      type: object
+      required:
+        - userId
+        - eventName
+        - payload
+      properties:
+        userId:
+          type: string
+          description: User identifier
+          example: "user-uuid-1234"
+        eventName:
+          type: string
+          description: Name of the event
+          enum:
+            - ride-booked
+            - ride-cancelled
+            - ride-started
+            - ride-completed
+          example: "ride-booked"
+        payload:
+          type: object
+          description: Event-specific data
+          example:
+            rideId: "ride-123"
+            pickupTime: "2024-11-15T08:30:00Z"
+            driverId: "driver-456"
+
+security:
+  - BearerAuth: []
+
+servers:
+  - url: https://tenant.api.aeria.world
+    description: Aeria Tenant API for Production
+  - url: https://staging-tenant.api.aeria.world
+    description: Aeria Tenant API for Staging
+
+paths:
+  /partner/v1/carpooling/events:
+    post:
+      tags:
+        - Event Operations
+      summary: Trigger Event on Aeria Backend
+      description: |
+        Partner calls this API to trigger events on Aeria's backend.
+        Notifications are automatically sent to users based on configured triggers for each event type.
+      parameters:
+        - $ref: '#/components/parameters/signatureHeader'
+        - $ref: '#/components/parameters/integrationIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventPayload'
+            examples:
+              rideBooked:
+                summary: Ride booked/matched
+                value:
+                  userId: "user-uuid-1234"
+                  eventName: "ride-booked"
+                  payload:
+                    rideId: "ride-123"
+                    pickupTime: "2024-11-15T08:30:00Z"
+                    driverId: "driver-456"
+              rideCancelled:
+                summary: Ride cancelled
+                value:
+                  userId: "user-uuid-1234"
+                  eventName: "ride-cancelled"
+                  payload:
+                    rideId: "ride-123"
+                    reason: "Driver unavailable"
+              rideCompleted:
+                summary: Ride completed
+                value:
+                  userId: "user-uuid-1234"
+                  eventName: "ride-completed"
+                  payload:
+                    rideId: "ride-123"
+                    duration: 1800
+                    distance: 15.5
+      responses:
+        '200':
+          description: Event processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  eventId:
+                    type: string
+                    example: "event-uuid-9876"
+                  status:
+                    type: string
+                    enum: [PROCESSED, QUEUED, FAILED]
+                    example: "PROCESSED"
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized - invalid signature or integration ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /partner/v1/carpooling/user-context:
+    get:
+      tags:
+        - Carpooling Operations
+      summary: Get User Context
+      description: |
+        Retrieve user information for carpooling service.
+        Returns only data that user has consented to share.
+      parameters:
+        - $ref: '#/components/parameters/signatureHeader'
+        - $ref: '#/components/parameters/integrationIdHeader'
+        - in: query
+          name: userId
+          required: true
+          schema:
+            type: string
+          description: User identifier
+          example: "user-uuid-1234"
+      responses:
+        '200':
+          description: User context retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/UserContext'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /partner/v1/carpooling/analytics:
+    post:
+      tags:
+        - Carpooling Operations
+      summary: Report Usage Analytics
+      description: |
+        Partner reports usage analytics to Aeria for partnership insights.
+        Helps track adoption, user engagement, and service quality.
+      parameters:
+        - $ref: '#/components/parameters/signatureHeader'
+        - $ref: '#/components/parameters/integrationIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - eventType
+                - timestamp
+              properties:
+                eventType:
+                  type: string
+                  description: Type of analytics event
+                  enum:
+                    - RIDE_REQUESTED
+                    - RIDE_MATCHED
+                    - RIDE_COMPLETED
+                    - RIDE_CANCELLED
+                    - USER_REGISTERED
+                    - USER_RATING_SUBMITTED
+                  example: "RIDE_COMPLETED"
+                timestamp:
+                  type: string
+                  format: date-time
+                  description: Event timestamp
+                  example: "2024-11-15T09:30:00Z"
+                userId:
+                  type: string
+                  description: Anonymized user identifier
+                  example: "user-uuid-1234"
+                tenantId:
+                  type: string
+                  description: Tenant identifier
+                  example: "tenant-uuid-5678"
+                metadata:
+                  type: object
+                  description: Event-specific metadata
+                  properties:
+                    rideId:
+                      type: string
+                    distance:
+                      type: number
+                      description: Distance in kilometers
+                    duration:
+                      type: number
+                      description: Duration in minutes
+                    cost:
+                      type: number
+                      description: Cost in INR
+                    rating:
+                      type: number
+                      minimum: 1
+                      maximum: 5
+                    co2Saved:
+                      type: number
+                      description: CO2 emissions saved in kg
+                  example:
+                    rideId: "ride-123"
+                    distance: 12.5
+                    duration: 35
+                    cost: 0
+                    rating: 4.5
+                    co2Saved: 2.8
+      responses:
+        '200':
+          description: Analytics recorded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Analytics event recorded"
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
