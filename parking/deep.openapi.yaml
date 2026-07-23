@@ -2,7 +2,7 @@ openapi: 3.0.0
 info:
   version: v1.1
   title: Parking Deep Integration API's
-  description: "Deep integration APIs for parking. Aeria handles the authorization and price calculation, while the partner handles the parking operations. v1.1 adds booking updates (extension/renewal), category-level bookings, a proactive vehicle settlement-status webhook (updateVehicleStatus), a fastag collection mode, collection/gate fields on movement logs and log pulls, and online+offline movement reporting semantics — additive to v1, plus one correction: the addWhitelist* required lists previously referenced a nonexistent property (registeredVehicles) and now name the real field."
+  description: "Deep integration APIs for parking. Aeria handles the authorization and price calculation, while the partner handles the parking operations. v1.1 adds booking updates (extension/renewal), category-level bookings, a proactive vehicle settlement-status webhook (updateVehicleStatus), a cross-channel movement notification webhook (notifyMovements), a fastag collection mode, collection/gate fields on movement logs and log pulls, and online+offline movement reporting semantics — additive to v1, plus one correction: the addWhitelist* required lists previously referenced a nonexistent property (registeredVehicles) and now name the real field."
 tags: 
   - name: Parking Operations
     description: APIs For Parking Operations
@@ -339,7 +339,7 @@ paths:
                     example:
                       categories:
                         - id: 00000000-0000-0000-0000-000000000000
-                          name: Accenture
+                          name: Tenant A
                           4w:
                             total: 10
                             available: 5
@@ -382,6 +382,12 @@ paths:
                 barrierId:
                   type: string
                   example: some-barrier-id
+                idempotencyKey:
+                  type: string
+                  maxLength: 64
+                  example: lane2-entry-000123
+                  nullable: true
+                  description: Optional partner-supplied idempotency key, unique within your integration — any stable pattern works. Re-submissions with the same idempotencyKey return the identical response. Without it, deduplication falls back to the natural key (vehicle with a pending/open session).
               required:
                 - vehicle
       responses:
@@ -420,6 +426,11 @@ paths:
                         type: number
                         example: 0
                         description: The amount to be collected for the vehicle at the time of entry
+                      paidUpto:
+                        type: string
+                        example: 2022-01-01T04:00:00Z
+                        nullable: true
+                        description: The time until which the session is settled, as of admission — far-future (e.g. 9999-12-31T23:59:59Z) means free exit (entitled/covered); absent means dues accrue from entry. Later changes are pushed via updateVehicleStatus.
                       validTill:
                         type: string
                         example: 2022-01-01T00:00:00Z
@@ -458,6 +469,17 @@ paths:
                 barrierId:
                   type: string
                   example: some-barrier-id
+                idempotencyKey:
+                  type: string
+                  maxLength: 64
+                  example: lane2-entry-000123
+                  nullable: true
+                  description: Optional partner-supplied idempotency key, unique within your integration — any stable pattern works. Re-submissions with the same idempotencyKey return the identical response. Without it, deduplication falls back to the natural key (the vehicle's open session).
+                sessionId:
+                  type: string
+                  example: 00000000-0000-0000-0000-000000000000
+                  nullable: true
+                  description: The session reference received at entry (the id from request-entry / allowEntry, or sessionId from notifyMovements), when known. Makes session resolution explicit; otherwise the vehicle's open session is resolved by plate.
               required:
                 - vehicleNo
       responses:
@@ -500,7 +522,7 @@ paths:
                   id:
                     type: string
                     example: 00000000-0000-0000-0000-000000000000
-                    description: Partner's stable identifier for this movement, used for idempotent reconciliation. For movements that respond to an Aeria authorization, use the id returned by request-entry / request-exit.
+                    description: Partner's unique identifier for THIS movement, used for idempotent reconciliation — one per physical movement. Never reuse a session reference across entry and exit; the session correlation, if needed, is separate.
                   vehicleNo:
                     type: string
                     example: DL01AA0007
@@ -599,6 +621,12 @@ paths:
                 barrierId:
                   type: string
                   example: some-barrier-id
+                idempotencyKey:
+                  type: string
+                  maxLength: 64
+                  example: lane2-entry-000123
+                  nullable: true
+                  description: Optional partner-supplied idempotency key, unique within your integration — any stable pattern works. Re-submissions with the same idempotencyKey return the identical response. Without it, deduplication falls back to the natural key (vehicle, entry time, exit time).
               required:
                 - vehicleNo
                 - entryTime
@@ -629,7 +657,7 @@ paths:
       tags: 
         - Webhook Operations
       summary: Allow entry of a vehicle at the barrier
-      description: Aeria will send a request to the partner to allow entry of a vehicle at the barrier
+      description: "Aeria will send a request to the partner to allow entry of a vehicle at the barrier — either app/support-initiated, or as the asynchronous completion of a request-entry that could not be authorized immediately (e.g. a guard decision on the category choice was pending). It carries the decision context of a successful request-entry response (session, bay, category, settlement horizon). Invariant: an allow push is sent only when nothing remains to collect at the lane — fare-based cases never defer, since the synchronous response carries the amount and the lane can collect and admit on the spot."
       parameters:
         - $ref: '#/components/parameters/signatureHeader'
       requestBody:
@@ -648,6 +676,23 @@ paths:
                 barrierId:
                   type: string
                   example: barrier1-0000-0000-0000-000000000000
+                paidUpto:
+                  type: string
+                  example: 2022-01-01T04:00:00Z
+                  nullable: true
+                  description: The settlement horizon of the session being authorized — far-future means free exit (entitled/covered); absent means dues accrue from entry. Subsequent changes are pushed via updateVehicleStatus.
+                sessionId:
+                  type: string
+                  example: 00000000-0000-0000-0000-000000000000
+                  description: The session reference (as a successful request-entry response would return), for correlation — generate your own per-movement identifier when reporting the movement
+                bay:
+                  description: The bay to display at the lane, as in the request-entry response
+                  allOf:
+                    - $ref: '#/components/schemas/Bay'
+                category:
+                  description: The resolved category, as in the request-entry response
+                  allOf:
+                    - $ref: '#/components/schemas/Category'
               required:
                 - registrationNumber
                 - validTill
@@ -662,7 +707,7 @@ paths:
       tags: 
         - Webhook Operations
       summary: Allow exit of a vehicle at the barrier
-      description: Aeria will send a request to the partner to allow exit of a vehicle at the barrier
+      description: "Aeria will send a request to the partner to allow exit of a vehicle at the barrier — either app/support-initiated, or as the asynchronous completion of a request-exit (e.g. the payment was completed in-app after the vehicle reached the barrier). Invariant: an allow push is sent only when nothing remains to collect at the lane — fare-based cases never defer, since the synchronous request-exit response carries the fare and the lane can collect and release on the spot. totalFare is carried for display/receipt."
       parameters:
         - $ref: '#/components/parameters/signatureHeader'
       requestBody:
@@ -684,12 +729,20 @@ paths:
                 totalFare:
                   type: number
                   example: 100
+                  description: The session's total fare, for display/receipt — already fully settled when this push is sent
                 validTill:
                   type: string
                   example: 2022-01-01T00:00:00Z
                 barrierId:
                   type: string
                   example: some-barrier-id
+                sessionId:
+                  type: string
+                  example: 00000000-0000-0000-0000-000000000000
+                  description: The session reference (as the request-exit response would return), for correlation — generate your own per-movement identifier when reporting the movement
+                categoryId:
+                  type: string
+                  example: 00000000-0000-0000-0000-000000000000
               required:
                 - registrationNumber
                 - vehicleType
@@ -1026,6 +1079,72 @@ paths:
                 - registrationNumber
                 - paidUpto
                 - updatedAt
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /<webhook:notifyMovements>:
+    post:
+      tags:
+        - Webhook Operations
+      summary: Notify the partner of movements that occurred outside its channel
+      description: "Aeria notifies the partner when vehicle movements (entry or exit) occur on another execution channel — e.g. a guard-operated lane — at a site where the partner also operates. Delivered singly or in batches: after a partner-side outage, Aeria collates pending notifications and delivers them together (the mirror of movement-logs batching in the other direction). Only movements the partner did not originate or witness are sent; the partner's own movement-logs reports are never echoed back. Items apply independently and are idempotent by id — duplicate deliveries are acknowledged and ignored, and each item carries its own timestamp so application is order-insensitive. Advisory — it lets the partner create the local entry record (so its lane can automate the eventual exit) or close a stale one (occupancy and anti-passback hygiene); partner-side state remains non-authoritative, and request-entry / request-exit remain the decision path."
+      parameters:
+        - $ref: '#/components/parameters/signatureHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                integrationId:
+                  type: string
+                  example: 00000000-0000-0000-0000-000000000000
+                movements:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: 00000000-0000-0000-0000-000000000000
+                        description: Aeria's stable reference for this movement — the idempotency key
+                      sessionId:
+                        type: string
+                        example: 00000000-0000-0000-0000-000000000000
+                        description: The session this movement belongs to (correlates with the id returned by request-entry and with updateVehicleStatus), when available
+                      registrationNumber:
+                        type: string
+                        example: MH01AB1234
+                      type:
+                        type: string
+                        example: entry
+                        anyOf:
+                          - type: string
+                            enum: [ entry, exit ]
+                      time:
+                        type: string
+                        example: 2022-01-01T00:00:00Z
+                      categoryId:
+                        type: string
+                        example: 00000000-0000-0000-0000-000000000000
+                      paidUpto:
+                        type: string
+                        example: 2022-01-01T04:00:00Z
+                        nullable: true
+                        description: For entry movements — the settlement horizon as of the movement, so the partner's lane can automate the eventual exit; absent means dues accrue. Subsequent changes are pushed via updateVehicleStatus.
+                    required:
+                      - id
+                      - registrationNumber
+                      - type
+                      - time
+              required:
+                - integrationId
+                - movements
       responses:
         '200':
           $ref: '#/components/responses/Success'
