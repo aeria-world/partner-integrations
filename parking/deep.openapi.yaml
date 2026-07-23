@@ -2,7 +2,7 @@ openapi: 3.0.0
 info:
   version: v1.1
   title: Parking Deep Integration API's
-  description: "Deep integration APIs for parking. Aeria handles the authorization and price calculation, while the partner handles the parking operations. v1.1 adds booking updates (extension/renewal), category-level bookings, a fastag collection mode, collection/gate fields on movement logs and log pulls, and online+offline movement reporting semantics — additive to v1, plus one correction: the addWhitelist* required lists previously referenced a nonexistent property (registeredVehicles) and now name the real field."
+  description: "Deep integration APIs for parking. Aeria handles the authorization and price calculation, while the partner handles the parking operations. v1.1 adds booking updates (extension/renewal), category-level bookings, a proactive vehicle settlement-status webhook (updateVehicleStatus), a fastag collection mode, collection/gate fields on movement logs and log pulls, and online+offline movement reporting semantics — additive to v1, plus one correction: the addWhitelist* required lists previously referenced a nonexistent property (registeredVehicles) and now name the real field."
 tags: 
   - name: Parking Operations
     description: APIs For Parking Operations
@@ -978,6 +978,54 @@ paths:
               required:
                 - integrationId
                 - bookingId
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /<webhook:updateVehicleStatus>:
+    post:
+      tags:
+        - Webhook Operations
+      summary: Proactively update the settlement status of a vehicle's open session
+      description: "Aeria notifies the partner when the settlement horizon of an in-progress session changes — a mid-session in-app payment, a post-entry booking extension, or a tenant covering the visit. The update always applies to the vehicle's currently open session at the site; if no session is open (the vehicle already exited), discard it. Upsert semantics ordered by updatedAt: apply an update only if its updatedAt is newer than the last applied for that vehicle — older or duplicate deliveries are acknowledged and ignored. Advisory state sync: request-exit remains the authoritative fare source when Aeria is reachable, and absence of a push never implies absence of payment. The synced paidUpto lets the partner decide exits locally while offline and drive lane/display behaviour."
+      parameters:
+        - $ref: '#/components/parameters/signatureHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                integrationId:
+                  type: string
+                  example: 00000000-0000-0000-0000-000000000000
+                id:
+                  type: string
+                  example: 00000000-0000-0000-0000-000000000000
+                  description: Aeria's session reference (as returned by request-entry), for correlation when available. The update is keyed by the vehicle's currently open session regardless.
+                registrationNumber:
+                  type: string
+                  example: MH01AB1234
+                categoryId:
+                  type: string
+                  example: 00000000-0000-0000-0000-000000000000
+                  description: The session's current category, after any re-categorization
+                paidUpto:
+                  type: string
+                  example: 2022-01-01T04:00:00Z
+                  description: The time until which the session is settled. Far-future (e.g. 9999-12-31T23:59:59Z) means the vehicle exits free — e.g. tenant-covered.
+                updatedAt:
+                  type: string
+                  example: 2022-01-01T01:30:00Z
+                  description: When Aeria produced this status. Apply only if newer than the last applied update for the vehicle; ignore older or duplicate deliveries.
+              required:
+                - integrationId
+                - registrationNumber
+                - paidUpto
+                - updatedAt
       responses:
         '200':
           $ref: '#/components/responses/Success'

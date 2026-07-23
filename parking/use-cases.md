@@ -25,7 +25,7 @@ It deliberately describes **flows and steps, not APIs**. Aeria publishes a refer
 For every vehicle movement the partner either:
 
 - **asks Aeria in real time** whether to admit/release a vehicle (online authorization, flow F3), or
-- **decides locally** from data Aeria has synchronized to it in advance (entitlements F1, bookings F2) — which keeps gates operational when connectivity to Aeria is degraded —
+- **decides locally** from data Aeria has synchronized to it (entitlements F1, bookings F2, in-session status F5) — which keeps gates operational when connectivity to Aeria is degraded —
 
 and in both cases **confirms the actual movement back to Aeria** (flow F4) so billing, reconciliation, and analytics are complete.
 
@@ -106,11 +106,11 @@ Each step states its direction, trigger, and the **semantic data** exchanged. Fi
 | **S9 Movement report** | Every physical entry/exit (singly or batched) | Movement type (entry/exit); plate; timestamp; gate identity; category; collection made at the gate — amount **and** method (cash / card / UPI / FASTag / other) | **Idempotent and batchable**; must cover movements decided locally while offline; gate identity mandatory for revenue attribution |
 | **S10 Movement retrieval** | Aeria audit / gap detection | In: time range. Out: the partner's raw movement (and, where used for financial reconciliation, collection) records for the range | **Conditional, transport-neutral** (pull API or scheduled export): required where completeness of the S9 push path cannot be established; otherwise an audit enhancement |
 
-### F5 — In-session adjustment *(Aeria-internal; optional sync)*
+### F5 — In-session status sync *(Aeria → Partner)*
 
 | Step | Trigger | Data | Expectations |
 |---|---|---|---|
-| **S11 Session validation** *(optional sync)* | Tenant covers or discounts a visitor's parking **after entry** | — (no partner exchange in the standard model); optional sync: plate + validity | **No partner interface is required in the deep model.** Aeria re-categorizes the open session internally; exit authorization (S7) then returns the adjusted fare — zero collectible with **far-future validity for full waivers**, so the vehicle can exit free at any time. The amount due is computed from the actual exit movement log and invoiced to the sponsoring tenant inside Aeria. A sync to the partner exists only as an engagement option where the partner's system maintains local fare state (native validation features) or offline exit decisions for validated vehicles are in scope |
+| **S11 Session status update (push)** | The settlement horizon of an open session changes: a mid-session in-app payment, a post-entry booking extension, or a tenant covering the visit | Plate; **paid-upto horizon** (far-future for full waivers); update timestamp; current category and session reference (correlation, when available) | Proactive, advisory push keyed to the vehicle's **currently open session**; ordered by the update timestamp — older or duplicate deliveries are ignored, and an update for a vehicle with no open session is discarded. Exit authorization (S7) remains the authoritative fare source when Aeria is reachable — absence of a push never implies absence of payment. The synced horizon lets the partner decide exits locally while offline and drive lane/display behaviour. The adjustment itself (e.g. VIP/tenant coverage) is an Aeria-internal session re-categorization; this push is how the gate learns its effect proactively. Dues are computed from the actual exit movement log and invoiced to the sponsoring tenant inside Aeria |
 
 ### F6 — Remote authorization *(Aeria → Partner)*
 
@@ -141,15 +141,15 @@ Which steps each capability consumes (● = required, ○ = optional/enhancing):
 | C2 Fixed parking | ● | ● | | | | ○ | ○ | | ● | ○ | | | | | |
 | C3 Flexi parking | ● | ● | | | | ● | ● | ○ | ● | ○ | | | | | |
 | C4 Paid employee parking | ● | ● | | | | ● | ● | | ● | ○ | | | | | |
-| C5 Pay-per-use visitor | | | | | | ● | ● | ● | ● | ○ | | | | ○ | |
-| C6 Pre-booking / reservation | | | ● | ● | ● | ● | ● | ○ | ● | ○ | | | | | |
+| C5 Pay-per-use visitor | | | | | | ● | ● | ● | ● | ○ | ○ | | | ○ | |
+| C6 Pre-booking / reservation | | | ● | ● | ● | ● | ● | ○ | ● | ○ | ○ | | | | |
 | C7 Priority / VIP visitor | | | ○ | | | ● | ● | | ● | | ○ | ○ | | | |
-| C8 Walk-in visitor mgmt | | | ○ | | ○ | ● | ● | ○ | ● | | | ○ | | ○ | |
+| C8 Walk-in visitor mgmt | | | ○ | | ○ | ● | ● | ○ | ● | | ○ | ○ | | ○ | |
 | C9 Occupancy & availability | | | | | | | | ● | ● | ○ | | | | | |
 | C10 Central fare computation | | | | | | ● | ● | | ● | | | | | ○ | |
 | C11 Revenue reconciliation | | | | | | | ● | | ● | ○ | | | | ● | |
 | C12 Movement audit | | | | | | ○ | ○ | | ● | ○ | | | | ○ | |
-| C13 Offline-tolerant operation | ● | ● | ● | ● | ● | | | | ● | ○ | | | | | |
+| C13 Offline-tolerant operation | ● | ● | ● | ● | ● | | | | ● | ○ | ○ | | | | |
 | C14 Exception settlement | | | | | | | | | ○ | | | | | ● | |
 | C15 Valet | | | | | | ○ | ○ | | ○ | | | | | | ● |
 | C16 Multi-entry passes | ● | ● | ○ | | | ● | ● | | ● | | | | | | |
@@ -159,7 +159,7 @@ Reading the matrix column-wise justifies the ask: e.g., S9 (movement report) is 
 
 ## 6. Execution formats and adapters
 
-- **Reference contract.** Aeria publishes an OpenAPI contract (`parking/deep.openapi.yaml` v1.1, aeria-world/partner-integrations): F3/F4/F7 steps as Aeria-hosted REST endpoints the partner calls; F1, F2 and F6 steps as partner-hosted webhooks Aeria calls (F5 is Aeria-internal — see S11). Per-step coverage:
+- **Reference contract.** Aeria publishes an OpenAPI contract (`parking/deep.openapi.yaml` v1.1, aeria-world/partner-integrations): F3/F4/F7 steps as Aeria-hosted REST endpoints the partner calls; F1, F2, F5 and F6 steps as partner-hosted webhooks Aeria calls. Per-step coverage:
 
   | Step | Reference-contract coverage (v1.1) |
   |---|---|
@@ -171,7 +171,7 @@ Reading the matrix column-wise justifies the ask: e.g., S9 (movement report) is 
   | S8 Availability query | Covered (`category-availabilty`) |
   | S9 Movement report | Covered (`movement-logs` — collection modes incl. FASTag; presence of gate identity and collection detail is verified per engagement in UAT) |
   | S10 Movement retrieval | Covered (`getLogs` incl. gate identity and collection fields); scheduled data-file export is an equally valid transport per engagement |
-  | S11 Session validation | Not needed as an interface in the deep model — after Aeria-side re-categorization, exit authorization (`request-exit`) returns the adjusted fare (zero collectible with far-future validity for full waivers); an adapter to partner-native validation interfaces is an engagement option |
+  | S11 Session status update | Covered (`updateVehicleStatus` — proactive paid-upto push, advisory; `request-exit` stays authoritative). An adapter to partner-native validation interfaces is an engagement option |
   | S12 / S13 Remote open | Covered (`allowEntry`, `allowExit`) |
   | S14 Manual settlement | Covered (`manual-exit` — the response prescribes the fare; the actual collection is reported via S9) |
   | S15 Valet lifecycle | Implemented in the platform's partner valet interface; published to partners on engagement demand |
@@ -185,7 +185,7 @@ Reading the matrix column-wise justifies the ask: e.g., S9 (movement report) is 
 - **Site instances:** credentials and configuration are scoped per site; multi-site = multiple instances of the same integration.
 - **Idempotency:** movement reporting (S9) is idempotent on the partner's stable movement identifier (falling back to vehicle + time + movement type); authorization steps (S6/S7) replay the prior decision for a vehicle whose session is already pending or open.
 - **Completeness:** every movement and every collection — including FASTag-collected fares and offline-period movements — must reach Aeria (push S9 and/or pull S10). Partial feeds undermine billing and analytics.
-- **Degradation envelope:** gate operation must not depend on Aeria's reachability **for synchronized traffic**: vehicles covered by entitlements (F1) and prepaid bookings (F2) are decided locally by the partner, with S9 catch-up on reconnection. Unsynchronized traffic — walk-in pay-per-use visitors needing live fare computation — follows the site's configured offline policy (e.g., deny, or admit via local ticketing regularized through S9/S14 afterwards); full offline visitor operation is **not** implied by this document and, if a site requires it, is a scoped engagement addition (it needs tariff/state synchronization semantics beyond F1/F2).
+- **Degradation envelope:** gate operation must not depend on Aeria's reachability **for synchronized traffic**: vehicles covered by entitlements (F1), prepaid bookings (F2), or a synced session status (S11 paid-upto) are decided locally by the partner, with S9 catch-up on reconnection. Unsynchronized traffic — walk-in pay-per-use visitors needing live fare computation — follows the site's configured offline policy (e.g., deny, or admit via local ticketing regularized through S9/S14 afterwards); full offline visitor operation is **not** implied by this document and, if a site requires it, is a scoped engagement addition (it needs tariff/state synchronization semantics beyond F1/F2).
 - **Gate identity:** every movement report carries the gate/barrier identity, and authorization requests carry it wherever the lane can supply it; Aeria's site configuration maps gate identities to checkpoints and collection points for gate-wise revenue attribution. Engagements enabling gate-wise attribution verify its presence during UAT.
 
 ---
