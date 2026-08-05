@@ -398,6 +398,7 @@ paths:
                       - entryTime
                       - bay
                       - category
+                      - unregistered
                     properties:
                       id:
                         type: string
@@ -420,6 +421,10 @@ paths:
                         type: string
                         example: 2022-01-01T00:00:00Z
                         description: The time till which this approval is valid. The bay is blocked for the vehicle till this time. Typically 2 minutes for each request.
+                      unregistered:
+                        type: boolean
+                        example: false
+                        description: Whether the vehicle was admitted as an unregistered (walk-in) vehicle rather than a pre-registered one.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
