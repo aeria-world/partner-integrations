@@ -1,0 +1,22 @@
+{
+  "meta": { "schemaVersion": 1, "updatedAt": null },
+  "partners": [
+    { "id": "ptn_local", "name": "aeria-local", "baseUrl": "http://localhost:3000", "paymentHandledBy": "aeria", "createdAt": null }
+  ],
+  "sites": [],
+  "siteBindings": [
+    { "id": "bnd_example", "partnerId": "ptn_local", "siteId": "REPLACE_WITH_SITE_ID", "integrationId": "REPLACE_WITH_INTEGRATION_ID", "secretKey": "REPLACE_WITH_SECRET" }
+  ],
+  "perimeters": [],
+  "barriers": [],
+  "parkings": [],
+  "zones": [],
+  "subZones": [],
+  "bays": [],
+  "categories": [],
+  "vehicles": [],
+  "whitelist": [],
+  "occupancy": [],
+  "collections": [],
+  "barrierLogs": []
+}

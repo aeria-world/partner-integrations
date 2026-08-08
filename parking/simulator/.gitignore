@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+
+# live runtime DB — contains secrets + local state; app auto-creates it on first run.
+# Use data/db.example.json as a template.
+data/db.json
+
+# local-only staging setup notes (contains integration secret)
+SETUP-STAGING.md
+
+# local-only deployment guide (kept out of the repo by request)
+DEPLOY.md
+
+# logs & OS cruft
+*.log
+.DS_Store
+
+# editor/harness
+.claude/
