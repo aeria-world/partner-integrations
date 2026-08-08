@@ -66,9 +66,13 @@ function render() {
     renderContext();
     renderNav();
     const main = $('#app');
+    const needsSite = ['barrier', 'console', 'tester', 'config', 'vehicles', 'occupancy', 'logs'];
     let screen = state.screen;
-    if (!state.partnerId) screen = 'partner';
-    else if (!state.siteId) screen = 'site';
+    // Pickers ('partner', 'site') render on demand; only deeper screens are force-redirected
+    // when their prerequisites are missing. (Without this, selecting a partner traps you on
+    // the site list and the partner breadcrumb can never return to the picker.)
+    if (screen !== 'partner' && !state.partnerId) screen = 'partner';
+    else if (needsSite.includes(screen) && !state.siteId) screen = 'site';
     main.innerHTML = SCREENS[screen] ? SCREENS[screen]() : SCREENS.partner();
     if (BINDERS[screen]) BINDERS[screen](main);
 }
