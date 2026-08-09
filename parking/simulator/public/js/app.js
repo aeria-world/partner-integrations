@@ -251,6 +251,8 @@ SCREENS.console = () => {
             <div class="card">
                 <label>Registration number (reader)</label>
                 <input id="lc-reg" placeholder="KA01AB1234" value="KA01AB1234" />
+                <label>Vehicle type</label>
+                <select id="lc-type"><option value="4w">4w</option><option value="2w">2w</option></select>
                 <label>Barrier code</label>
                 <select id="lc-code">${(b.barrierCodes || []).map((c) => `<option>${esc(c)}</option>`).join('') || '<option value="">(none set)</option>'}</select>
                 ${cats.length ? `<label>Category (for movement-log)</label><select id="lc-cat">${cats.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>` : ''}
@@ -417,7 +419,9 @@ async function onLaneAction(act, root) {
     if (act === 'request-entry') {
         if (!reg) return toast('Enter a registration number', true);
         const v = db().vehicles.find((x) => x.registrationNumber === reg);
-        body = { vehicle: { registrationNumber: reg, ...(v && v.type ? { type: v.type } : {}) }, barrierId: code };
+        // ms-parking requires vehicle.type for the visitor/on-spot path (non-whitelisted plates).
+        const vType = ($('#lc-type', root) && $('#lc-type', root).value) || (v && v.type) || '4w';
+        body = { vehicle: { registrationNumber: reg, type: vType }, barrierId: code };
     } else if (act === 'request-exit') {
         if (!reg) return toast('Enter a registration number', true);
         body = { vehicleNo: reg, barrierId: code };
