@@ -252,6 +252,10 @@ SCREENS.console = () => {
                 <label>Barrier code</label>
                 <select id="lc-code">${(b.barrierCodes || []).map((c) => `<option>${esc(c)}</option>`).join('') || '<option value="">(none set)</option>'}</select>
                 ${cats.length ? `<label>Category (for movement-log)</label><select id="lc-cat">${cats.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>` : ''}
+                <label>Collection amount (movement-log)</label>
+                <input id="lc-col-amount" type="number" min="0" placeholder="blank = none (entry) / amount due (exit)" />
+                <label>Collection mode</label>
+                <select id="lc-col-mode"><option value="cash">cash</option><option value="QR">QR</option><option value="card">card</option></select>
                 <label>Error injection (FR-9)</label>
                 <select id="lc-inj">
                     <option value="none">none</option>
@@ -325,16 +329,14 @@ function driveBoom(result) {
     const boom = $('#boom'), lbl = $('#boom-state');
     if (!boom) return;
     const set = (s) => { boom.className = 'card boom-' + s; if (lbl) lbl.textContent = s; };
-    const allow = result === 'ALLOWED';
-    if (allow) {
+    // Only a fresh ALLOWED opens the barrier. DENIED / PAYMENT_DUE / NETWORK_ERROR and
+    // ALREADY_REPORTED (208 already-inside/exited) keep it DOWN — an already-inside vehicle
+    // must not re-open the gate (and may still owe an uncollected payment).
+    if (result === 'ALLOWED') {
         set('OPENING');
         state.boomTimers.push(setTimeout(() => set('OPENED'), 250));
         state.boomTimers.push(setTimeout(() => set('CLOSING'), 6250));
         state.boomTimers.push(setTimeout(() => set('CLOSED'), 6900));
-    } else if (result === 'ALREADY_REPORTED') {
-        set('OPENING');
-        state.boomTimers.push(setTimeout(() => set('OPENED'), 250));
-        state.boomTimers.push(setTimeout(() => set('CLOSED'), 3000));
     } else {
         set('BLOCKED');
         state.boomTimers.push(setTimeout(() => set('CLOSED'), 3000));
@@ -430,20 +432,25 @@ async function onLaneAction(act, root) {
         if (!reg) return toast('Enter a registration number', true);
         const catEl = $('#lc-cat', root);
         const categoryId = catEl ? catEl.value : uuid(); // required by DTO but unused server-side
+        const colRaw = (($('#lc-col-amount', root) && $('#lc-col-amount', root).value) || '').trim();
+        const colMode = ($('#lc-col-mode', root) && $('#lc-col-mode', root).value) || 'cash';
         if (act === 'mlog-entry') {
             // id must be the utilization id from the prior request-entry (ms-parking does getUtilizationById).
             const occ = occupancyForSite(state.siteId).find((o) => o.registrationNumber === reg);
             const utilId = (occ && occ.utilizationId) || (latestLogPayload('request-entry', reg) || {}).id;
             if (!utilId) return toast('No active entry for this vehicle — run Request Entry first', true);
-            body = [{ id: utilId, vehicleNo: reg, time: new Date().toISOString(), type: 'entry', categoryId, barrierId: code }];
+            const entry = { id: utilId, vehicleNo: reg, time: new Date().toISOString(), type: 'entry', categoryId, barrierId: code };
+            // Collection is optional on entry (syncEntryCollection only settles when one is sent).
+            if (colRaw !== '') entry.collection = { amount: Number(colRaw), mode: colMode };
+            body = [entry];
         } else {
             // id must be the vehicle-log id from the prior request-exit (getVehicleLogUsingId).
             const exitPayload = latestLogPayload('request-exit', reg);
             const vLogId = exitPayload && exitPayload.id;
             if (!vLogId) return toast('No request-exit found for this vehicle — run Request Exit first', true);
             // logExitMovement destructures collection unconditionally → must send one to avoid a 500.
-            const amount = typeof exitPayload.amountToPay === 'number' ? exitPayload.amountToPay : 0;
-            body = [{ id: vLogId, vehicleNo: reg, time: new Date().toISOString(), type: 'exit', categoryId, barrierId: code, collection: { amount, mode: 'cash' } }];
+            const amount = colRaw !== '' ? Number(colRaw) : (typeof exitPayload.amountToPay === 'number' ? exitPayload.amountToPay : 0);
+            body = [{ id: vLogId, vehicleNo: reg, time: new Date().toISOString(), type: 'exit', categoryId, barrierId: code, collection: { amount, mode: colMode } }];
         }
     } else if (act === 'category-availability') {
         action = 'category-availability'; body = undefined;
