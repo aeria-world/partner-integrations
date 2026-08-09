@@ -239,10 +239,6 @@ SCREENS.console = () => {
                 </div>
             </div>
             <div class="card">
-                <div class="inline"><h2 style="margin:0">Availability</h2><span class="spacer"></span><button class="btn sm" id="lc-avail-snap">Snapshot</button></div>
-                <div id="lc-avail" style="margin-top:10px"><div class="empty">No snapshot yet — click Snapshot before and after an entry/exit to see the bay count change.</div></div>
-            </div>
-            <div class="card">
                 <h2 style="margin-top:0">Raw response</h2>
                 <pre class="json" id="rawout">—</pre>
             </div>
@@ -271,6 +267,10 @@ SCREENS.console = () => {
                     ${showExit ? `<button class="btn" data-act="mlog-exit">Log Exit</button>` : ''}
                     <button class="btn ghost" data-act="force-open">Force open</button>
                 </div>
+            </div>
+            <div class="card">
+                <div class="inline"><h2 style="margin:0">Availability</h2><span class="spacer"></span><button class="btn sm" id="lc-avail-snap">Snapshot</button></div>
+                <div id="lc-avail" style="margin-top:10px"><div class="empty">No snapshot yet — click Snapshot before and after an entry/exit to see the bay count change.</div></div>
             </div>
         </div>
     </div>`;
@@ -453,7 +453,9 @@ async function onLaneAction(act, root) {
     try {
         const res = await API.call({ partnerId: state.partnerId, siteId: state.siteId, barrierId: state.barrierId, action, body, overrides });
         updateDisplay(action, res);
-        driveBoom(res.result);
+        // Only the entry/exit APIs physically open the barrier. Movement-logs and
+        // category-availability must never drive the boom.
+        if (action === 'request-entry' || action === 'request-exit') driveBoom(res.result);
         await refresh(true); // pick up occupancy/log changes in the background
     } catch (e) {
         toast(e.message, true);
