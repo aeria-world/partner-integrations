@@ -278,9 +278,7 @@ function reqFieldHtml(key, b) {
             <label>Collection amount <span style="font-weight:400;color:var(--muted)">(blank = don't send collection)</span></label>
             <input id="f-col-amount" type="number" min="0" placeholder="blank = none" />
             <label>Collection mode</label>
-            <select id="f-col-mode"><option value="cash">cash</option><option value="QR">QR</option><option value="card">card</option></select>
-            <label>Collection type</label>
-            <select id="f-col-type"><option value="">(none)</option><option value="partner">partner</option></select>`;
+            <select id="f-col-mode"><option value="cash">cash</option><option value="QR">QR</option><option value="card">card</option></select>`;
         default: return '';
     }
 }
@@ -430,8 +428,7 @@ async function onSend(root) {
         const raw = (el.value || '').trim();
         if (raw === '') return null; // only sent when the operator enters an amount
         const mode = ($('#f-col-mode', root) && $('#f-col-mode', root).value) || 'cash';
-        const t = ($('#f-col-type', root) && $('#f-col-type', root).value) || '';
-        return { amount: Number(raw), mode, ...(t ? { type: t } : {}) };
+        return { amount: Number(raw), mode }; // ms-parking Collection DTO = { amount, mode } only
     };
 
     let action = type, body;
