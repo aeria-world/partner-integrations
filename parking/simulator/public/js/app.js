@@ -195,7 +195,7 @@ const REQUESTS = {
     'request-exit': { label: 'Request exit', fields: ['reg', 'code'] },
     'mlog-entry': { label: 'Movement log — entry', fields: ['reg', 'utilId', 'code', 'collection'] },
     'mlog-exit': { label: 'Movement log — exit', fields: ['reg', 'vlogId', 'code', 'collection'] },
-    'manual-exit': { label: 'Manual exit', fields: ['reg', 'entryTime', 'exitTime', 'remark', 'code', 'catId'] },
+    'manual-exit': { label: 'Manual exit', fields: ['reg', 'remark', 'code'] },
 };
 
 SCREENS.console = () => {
@@ -275,15 +275,7 @@ function reqFieldHtml(key, b) {
         case 'code': return `<label>Barrier code</label><select id="f-code">${codes.map((c) => `<option>${esc(c)}</option>`).join('') || '<option value="">(none set)</option>'}</select>`;
         case 'utilId': return `<label>Utilization id <span style="font-weight:400;color:var(--muted)">(blank = auto from last entry)</span></label><input id="f-util" placeholder="auto" />`;
         case 'vlogId': return `<label>Vehicle-log id <span style="font-weight:400;color:var(--muted)">(blank = auto from last exit)</span></label><input id="f-vlog" placeholder="auto" />`;
-        case 'entryTime': return `<label>Entry time (ISO)</label><input id="f-entry" value="${new Date(Date.now() - 3600000).toISOString()}" />`;
-        case 'exitTime': return `<label>Exit time (ISO)</label><input id="f-exit" value="${new Date().toISOString()}" />`;
         case 'remark': return `<label>Remark</label><input id="f-remark" placeholder="optional" />`;
-        case 'catId': {
-            const cats = categoriesForSite(state.siteId);
-            return `<label>Category id</label>${cats.length
-                ? `<select id="f-cat">${cats.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>`
-                : `<input id="f-cat" placeholder="category uuid (optional)" />`}`;
-        }
         case 'collection': return `
             <label>Collection amount <span style="font-weight:400;color:var(--muted)">(blank = don't send collection)</span></label>
             <input id="f-col-amount" type="number" min="0" placeholder="blank = none" />
@@ -467,27 +459,28 @@ async function onSend(root) {
                 utilId = (occ && occ.utilizationId) || (latestLogPayload('request-entry', reg()) || {}).id;
             }
             if (!utilId) return toast('No utilization id — run Request entry first, or enter one', true);
-            const log = { id: utilId, vehicleNo: reg(), time: new Date().toISOString(), type: 'entry', categoryId, barrierId: code };
+            // time is intentionally omitted — ms-parking timestamps the movement itself.
+            const log = { id: utilId, vehicleNo: reg(), type: 'entry', categoryId, barrierId: code };
             if (collection) log.collection = collection;
             body = [log];
         } else {
             let vlogId = (($('#f-vlog', root) && $('#f-vlog', root).value) || '').trim();
             if (!vlogId) vlogId = (latestLogPayload('request-exit', reg()) || {}).id;
             if (!vlogId) return toast('No vehicle-log id — run Request exit first, or enter one', true);
-            const log = { id: vlogId, vehicleNo: reg(), time: new Date().toISOString(), type: 'exit', categoryId, barrierId: code };
+            // time is intentionally omitted — ms-parking timestamps the movement itself.
+            const log = { id: vlogId, vehicleNo: reg(), type: 'exit', categoryId, barrierId: code };
             if (collection) log.collection = collection;
             body = [log];
         }
     } else if (type === 'manual-exit') {
         if (!reg()) return toast('Enter a registration number', true);
-        const catVal = ($('#f-cat', root) && $('#f-cat', root).value) || '';
+        // Entry/exit times handled behind the scenes (entry 1h ago, exit now); no categoryId (unhandled server-side).
         body = {
             vehicleNo: reg(),
-            entryTime: ($('#f-entry', root) && $('#f-entry', root).value) || undefined,
-            exitTime: ($('#f-exit', root) && $('#f-exit', root).value) || undefined,
+            entryTime: new Date(Date.now() - 3600000).toISOString(),
+            exitTime: new Date().toISOString(),
             remark: ($('#f-remark', root) && $('#f-remark', root).value) || undefined,
             barrierId: code,
-            ...(catVal ? { categoryId: catVal } : {}),
         };
     }
 
