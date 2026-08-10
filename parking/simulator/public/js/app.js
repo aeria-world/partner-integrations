@@ -234,12 +234,6 @@ SCREENS.console = () => {
                 <select id="lc-barrier">${bars.map((x) => `<option value="${x.id}" ${x.id === b.id ? 'selected' : ''}>${esc(x.name)} (${x.direction})</option>`).join('')}</select>
                 <label>Request type</label>
                 <select id="lc-req">${Object.entries(REQUESTS).map(([k, v]) => `<option value="${k}">${esc(v.label)}</option>`).join('')}</select>
-                <label>Error injection (FR-9)</label>
-                <select id="lc-inj">
-                    <option value="none">none</option>
-                    <option value="bad">bad signature</option>
-                    <option value="expired">expired timestamp</option>
-                </select>
             </div>
             <div class="card">
                 <div id="lc-fields"></div>
@@ -447,8 +441,7 @@ async function onSend(root) {
     const type = $('#lc-req', root).value;
     const b = barrier() || {};
     const code = $('#f-code', root) ? $('#f-code', root).value : undefined;
-    const injection = $('#lc-inj', root).value;
-    const overrides = injection === 'none' ? {} : { signatureMode: injection };
+    const overrides = {};
     const reg = () => (($('#f-reg', root) && $('#f-reg', root).value) || '').trim();
     const buildCollection = () => {
         const el = $('#f-col-amount', root);
@@ -576,13 +569,6 @@ SCREENS.config = () => {
         <div class="btnbar"><button class="btn primary" id="cb-add">Add barrier</button></div>
     </div>
 
-    ${genericSection('categories', 'Categories', [
-        { key: 'name', label: 'Name' },
-        { key: 'workflow', label: 'Workflow', type: 'select', options: ['visitor', 'employee', 'tenant_sold', 'staff'] },
-    ], (r) => r.siteId === state.siteId, () => ({ siteId: state.siteId }))}
-
-    ${genericSection('parkings', 'Parkings', [{ key: 'name', label: 'Name' }, { key: 'parkingType', label: 'Type' }], (r) => r.siteId === state.siteId, () => ({ siteId: state.siteId }))}
-    ${genericSection('bays', 'Bays', [{ key: 'name', label: 'Name' }, { key: 'parallelCount', label: 'Parallel', type: 'number' }], (r) => true, () => ({}))}
     `;
 };
 BINDERS.config = (root) => {
