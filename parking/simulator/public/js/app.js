@@ -193,8 +193,8 @@ const REQUESTS = {
     'category-availability': { label: 'Category availability', fields: [] },
     'request-entry': { label: 'Request entry', fields: ['reg', 'vtype', 'code'] },
     'request-exit': { label: 'Request exit', fields: ['reg', 'code'] },
-    'mlog-entry': { label: 'Movement log — entry', fields: ['reg', 'utilId', 'code', 'collection'] },
-    'mlog-exit': { label: 'Movement log — exit', fields: ['reg', 'vlogId', 'code', 'collection'] },
+    'mlog-entry': { label: 'Movement log — entry', fields: ['reg', 'code', 'collection'] },
+    'mlog-exit': { label: 'Movement log — exit', fields: ['reg', 'code', 'collection'] },
     'manual-exit': { label: 'Manual exit', fields: ['reg', 'remark', 'code'] },
 };
 
@@ -273,8 +273,6 @@ function reqFieldHtml(key, b) {
         case 'reg': return `<label>Registration number</label><input id="f-reg" value="KA01AB1234" />`;
         case 'vtype': return `<label>Vehicle type</label><select id="f-vtype"><option value="4w">4w</option><option value="2w">2w</option></select>`;
         case 'code': return `<label>Barrier code</label><select id="f-code">${codes.map((c) => `<option>${esc(c)}</option>`).join('') || '<option value="">(none set)</option>'}</select>`;
-        case 'utilId': return `<label>Utilization id <span style="font-weight:400;color:var(--muted)">(blank = auto from last entry)</span></label><input id="f-util" placeholder="auto" />`;
-        case 'vlogId': return `<label>Vehicle-log id <span style="font-weight:400;color:var(--muted)">(blank = auto from last exit)</span></label><input id="f-vlog" placeholder="auto" />`;
         case 'remark': return `<label>Remark</label><input id="f-remark" placeholder="optional" />`;
         case 'collection': return `
             <label>Collection amount <span style="font-weight:400;color:var(--muted)">(blank = don't send collection)</span></label>
@@ -453,20 +451,18 @@ async function onSend(root) {
         const categoryId = ($('#f-cat', root) && $('#f-cat', root).value) || (cats[0] && cats[0].id) || uuid();
         const collection = buildCollection();
         if (type === 'mlog-entry') {
-            let utilId = (($('#f-util', root) && $('#f-util', root).value) || '').trim();
-            if (!utilId) {
-                const occ = occupancyForSite(state.siteId).find((o) => o.registrationNumber === reg());
-                utilId = (occ && occ.utilizationId) || (latestLogPayload('request-entry', reg()) || {}).id;
-            }
-            if (!utilId) return toast('No utilization id — run Request entry first, or enter one', true);
+            // Utilization id is auto-derived from the last Request entry for this plate.
+            const occ = occupancyForSite(state.siteId).find((o) => o.registrationNumber === reg());
+            const utilId = (occ && occ.utilizationId) || (latestLogPayload('request-entry', reg()) || {}).id;
+            if (!utilId) return toast('Run Request entry for this vehicle first', true);
             // time is intentionally omitted — ms-parking timestamps the movement itself.
             const log = { id: utilId, vehicleNo: reg(), type: 'entry', categoryId, barrierId: code };
             if (collection) log.collection = collection;
             body = [log];
         } else {
-            let vlogId = (($('#f-vlog', root) && $('#f-vlog', root).value) || '').trim();
-            if (!vlogId) vlogId = (latestLogPayload('request-exit', reg()) || {}).id;
-            if (!vlogId) return toast('No vehicle-log id — run Request exit first, or enter one', true);
+            // Vehicle-log id is auto-derived from the last Request exit for this plate.
+            const vlogId = (latestLogPayload('request-exit', reg()) || {}).id;
+            if (!vlogId) return toast('Run Request exit for this vehicle first', true);
             // time is intentionally omitted — ms-parking timestamps the movement itself.
             const log = { id: vlogId, vehicleNo: reg(), type: 'exit', categoryId, barrierId: code };
             if (collection) log.collection = collection;

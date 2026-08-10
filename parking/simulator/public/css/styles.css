@@ -237,6 +237,26 @@ pre.json {
     max-width: 340px; z-index: 50;
 }
 .toast.err { border-left-color: var(--err); }
-.inline { display: flex; gap: 8px; align-items: center; }
+.inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .spacer { flex: 1; }
 details summary { cursor: pointer; color: var(--accent); font-size: 12px; }
+
+/* ---------- responsive ---------- */
+/* Wide content (tables) scrolls inside its card instead of pushing the page sideways. */
+.card { overflow-x: auto; }
+
+@media (max-width: 760px) {
+    .topbar { flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 14px; }
+    .layout { flex-direction: column; }
+    .nav {
+        width: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 8px 10px;
+    }
+    .nav button { width: auto; }
+    .main { padding: 16px 14px; max-width: 100%; }
+}
