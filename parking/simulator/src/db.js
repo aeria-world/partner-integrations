@@ -21,6 +21,7 @@ const EMPTY_DB = {
     occupancy: [],
     collections: [],
     barrierLogs: [],
+    availability: [], // per-site category-availability snapshot, adjusted on entry/exit
 };
 
 // Collections the generic CRUD endpoints may touch, with their primary-key field.

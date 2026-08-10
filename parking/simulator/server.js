@@ -135,6 +135,23 @@ app.post('/api/call', async (req, res) => {
     };
     db.barrierLogs.push(logEntry);
 
+    // Local availability model (persisted): a fresh availability call overwrites the snapshot;
+    // a successful entry decrements the resolved category's available (for the vehicle's size),
+    // a successful exit increments it back.
+    const data = payloadOf(result.response) || {};
+    if (action === 'category-availability' && outcome === 'ALLOWED' && Array.isArray(data.categories)) {
+        setAvailability(db, siteId, data.categories);
+    } else if (action === 'request-entry' && (outcome === 'ALLOWED' || outcome === 'PAYMENT_DUE')) {
+        const vt = body && body.vehicle && body.vehicle.type;
+        if (data.category && data.category.id && vt) adjustAvailability(db, siteId, data.category.id, vt, -1);
+    } else if (action === 'request-exit' && outcome === 'ALLOWED') {
+        const plate = extractReg(action, body);
+        const occ = db.occupancy.find((o) => o.siteId === siteId && o.registrationNumber === plate);
+        const catId = data.categoryId || (occ && occ.category && occ.category.id);
+        const vt = occ && occ.vehicleType;
+        if (catId && vt) adjustAvailability(db, siteId, catId, vt, 1);
+    }
+
     // Maintain the local occupancy board on successful entry/exit.
     updateOccupancy(db, action, siteId, barrierId, outcome, result.response, body);
 
@@ -177,6 +194,8 @@ function updateOccupancy(db, action, siteId, barrierId, outcome, response, reque
             category: data.category || null,
             validTill: data.validTill || null,
             entryBarrierId: barrierId || null,
+            unregistered: data.unregistered === true,
+            vehicleType: (requestBody && requestBody.vehicle && requestBody.vehicle.type) || (existing && existing.vehicleType) || null,
         };
         if (existing) Object.assign(existing, row);
         else db.occupancy.push(row);
@@ -185,6 +204,24 @@ function updateOccupancy(db, action, siteId, barrierId, outcome, response, reque
     if ((action === 'request-exit' || action === 'manual-exit') && ['ALLOWED', 'ALREADY_REPORTED'].includes(outcome)) {
         db.occupancy = db.occupancy.filter((o) => !(o.siteId === siteId && o.registrationNumber === plate));
     }
+}
+
+// Overwrite a site's stored availability snapshot from a fresh category-availability response.
+function setAvailability(db, siteId, categories) {
+    const clean = categories.map((c) => ({ id: c.id, name: c.name, '2w': c['2w'], '4w': c['4w'] }));
+    const row = db.availability.find((a) => a.siteId === siteId);
+    if (row) { row.categories = clean; row.updatedAt = new Date().toISOString(); }
+    else db.availability.push({ siteId, categories: clean, updatedAt: new Date().toISOString() });
+}
+
+// Adjust one category's available count for a vehicle size (delta -1 on entry, +1 on exit).
+function adjustAvailability(db, siteId, categoryId, sizeKey, delta) {
+    const row = db.availability.find((a) => a.siteId === siteId);
+    if (!row) return; // no snapshot captured yet — nothing to adjust
+    const cat = row.categories.find((c) => c.id === categoryId);
+    if (!cat || !cat[sizeKey] || typeof cat[sizeKey].available !== 'number') return;
+    cat[sizeKey].available += delta;
+    row.updatedAt = new Date().toISOString();
 }
 
 app.get('/api/health', (req, res) => res.json({ ok: true, port: PORT }));

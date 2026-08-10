@@ -193,8 +193,8 @@ const REQUESTS = {
     'category-availability': { label: 'Category availability', fields: [] },
     'request-entry': { label: 'Request entry', fields: ['reg', 'vtype', 'code'] },
     'request-exit': { label: 'Request exit', fields: ['reg', 'code'] },
-    'mlog-entry': { label: 'Movement log — entry', fields: ['reg', 'code', 'collection'] },
-    'mlog-exit': { label: 'Movement log — exit', fields: ['reg', 'code', 'collection'] },
+    'mlog-entry': { label: 'Movement log — entry', fields: ['reg', 'catinfo', 'code', 'time', 'collection'] },
+    'mlog-exit': { label: 'Movement log — exit', fields: ['reg', 'catinfo', 'code', 'time', 'collection'] },
     'manual-exit': { label: 'Manual exit', fields: ['reg', 'remark', 'code'] },
 };
 
@@ -270,10 +270,16 @@ BINDERS.console = (root) => {
 function reqFieldHtml(key, b) {
     const codes = b.barrierCodes || [];
     switch (key) {
-        case 'reg': return `<label>Registration number</label><input id="f-reg" value="KA01AB1234" />`;
+        case 'reg': {
+            const plates = [...new Set(occupancyForSite(state.siteId).map((o) => o.registrationNumber))];
+            return `<label>Registration number</label><input id="f-reg" value="KA01AB1234" list="lc-plates" autocomplete="off" /><datalist id="lc-plates">${plates.map((p) => `<option value="${esc(p)}"></option>`).join('')}</datalist>`;
+        }
+        case 'catinfo': return `<label>Category (from request-entry) — read-only</label><div id="f-catinfo" style="padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel-2)">—</div>`;
         case 'vtype': return `<label>Vehicle type</label><select id="f-vtype"><option value="4w">4w</option><option value="2w">2w</option></select>`;
         case 'code': return `<label>Barrier code</label><select id="f-code">${codes.map((c) => `<option>${esc(c)}</option>`).join('') || '<option value="">(none set)</option>'}</select>`;
         case 'remark': return `<label>Remark</label><input id="f-remark" placeholder="optional" />`;
+        case 'time': return `<label>Movement time (ISO)</label>
+            <div class="inline"><input id="f-time" style="flex:1;min-width:0" value="${new Date().toISOString()}" /><button type="button" class="btn sm" id="f-time-now">Now</button></div>`;
         case 'collection': return `
             <label>Collection amount <span style="font-weight:400;color:var(--muted)">(blank = don't send collection)</span></label>
             <input id="f-col-amount" type="number" min="0" placeholder="blank = none" />
@@ -289,42 +295,64 @@ function renderReqFields(root) {
     const b = barrier() || {};
     const fields = (REQUESTS[type] || {}).fields || [];
     container.innerHTML = fields.length ? fields.map((k) => reqFieldHtml(k, b)).join('') : '<div class="empty" style="padding:8px">No fields — just Send.</div>';
+    const nowBtn = $('#f-time-now', container);
+    if (nowBtn) nowBtn.addEventListener('click', () => { const t = $('#f-time', container); if (t) t.value = new Date().toISOString(); });
+    // Prepopulate the read-only category/unregistered block from the vehicle's saved entry/exit data.
+    const regEl = $('#f-reg', container);
+    const catInfo = $('#f-catinfo', container);
+    if (regEl && catInfo) {
+        const upd = () => { catInfo.innerHTML = catInfoHtml(regEl.value.trim()); };
+        regEl.addEventListener('input', upd);
+        upd();
+    }
 }
 
-// Fetch category-availability and render current counts with a delta vs the previous snapshot.
+// Best-known category/unregistered for a plate: live occupancy → last request-entry → last request-exit.
+function vehicleInfo(plate) {
+    if (!plate) return null;
+    const occ = occupancyForSite(state.siteId).find((o) => o.registrationNumber === plate);
+    if (occ) return { categoryId: occ.category && occ.category.id, categoryName: occ.category && occ.category.name, unregistered: occ.unregistered };
+    const e = latestLogPayload('request-entry', plate);
+    if (e && e.category) return { categoryId: e.category.id, categoryName: e.category.name, unregistered: e.unregistered };
+    const x = latestLogPayload('request-exit', plate);
+    if (x && x.categoryId) return { categoryId: x.categoryId, categoryName: catNameById(x.categoryId), unregistered: undefined };
+    return null;
+}
+function catNameById(id) {
+    const row = (db().availability || []).find((a) => a.siteId === state.siteId);
+    const c = row && row.categories.find((x) => x.id === id);
+    return c ? c.name : '';
+}
+function catInfoHtml(plate) {
+    const info = vehicleInfo(plate);
+    if (!info || !info.categoryId) return '<span style="color:var(--muted)">No saved entry for this vehicle — run Request entry first.</span>';
+    let unreg = '';
+    if (info.unregistered === true) unreg = ' <span class="badge" style="color:var(--warn);border-color:var(--warn)">unregistered</span>';
+    else if (info.unregistered === false) unreg = ' <span class="badge" style="color:var(--ok);border-color:var(--ok)">registered</span>';
+    return `<div><b>${esc(info.categoryName || '—')}</b>${unreg}</div><div class="mono" style="font-size:11px;opacity:.7">${esc(info.categoryId)}</div>`;
+}
+
+// Refresh the persisted availability snapshot from a fresh category-availability call.
 async function snapAvailability(btn) {
     if (btn) btn.disabled = true;
     try {
         const res = await API.call({ partnerId: state.partnerId, siteId: state.siteId, action: 'category-availability' });
         if (res.error || res.status >= 400) { toast('Availability failed: ' + (errorMessage(res) || res.error || res.status), true); }
-        const payload = getPayload(res.response);
-        const categories = (payload && payload.categories) || [];
-        state.availSnaps.push({ ts: new Date().toISOString(), categories });
-        if (state.availSnaps.length > 2) state.availSnaps.shift();
+        await refresh(true); // server has overwritten db.availability
         renderAvail();
-        await refresh(true);
     } catch (e) { toast(e.message, true); } finally { if (btn) btn.disabled = false; }
 }
+// Render the persisted availability model (server adjusts it ±1 on entry/exit).
 function renderAvail() {
     const el = $('#lc-avail');
     if (!el) return;
-    const snaps = state.availSnaps;
-    if (!snaps.length) { el.innerHTML = '<div class="empty">No snapshot yet.</div>'; return; }
-    const cur = snaps[snaps.length - 1];
-    const prev = snaps.length > 1 ? snaps[snaps.length - 2] : null;
-    const cell = (c, size) => {
-        const a = (c[size] && c[size].available) ?? 0, t = (c[size] && c[size].total) ?? 0;
-        let delta = '';
-        if (prev) {
-            const p = prev.categories.find((x) => x.id === c.id);
-            const d = a - ((p && p[size] && p[size].available) ?? a);
-            if (d !== 0) delta = ` <span class="pill" style="color:${d < 0 ? 'var(--err)' : 'var(--ok)'}">${d > 0 ? '+' : ''}${d}</span>`;
-        }
-        return `${a}/${t}${delta}`;
-    };
-    const rows = cur.categories.map((c) => `<tr><td>${esc(c.name || c.id)}</td><td>${cell(c, '2w')}</td><td>${cell(c, '4w')}</td></tr>`).join('');
-    el.innerHTML = `<table><thead><tr><th>Category</th><th>2W avail/total</th><th>4W avail/total</th></tr></thead><tbody>${rows || '<tr><td colspan="3" class="empty">No categories returned</td></tr>'}</tbody></table>
-        <div class="sub" style="margin-top:6px">${prev ? `Δ shown vs snapshot at ${fmtTime(prev.ts)} · ` : 'first snapshot · '}latest ${fmtTime(cur.ts)}</div>`;
+    const row = (db().availability || []).find((a) => a.siteId === state.siteId);
+    const cats = row && row.categories;
+    if (!cats || !cats.length) { el.innerHTML = '<div class="empty">No snapshot yet — click Snapshot.</div>'; return; }
+    const cell = (c, size) => `${(c[size] && c[size].available) ?? 0}/${(c[size] && c[size].total) ?? 0}`;
+    const rows = cats.map((c) => `<tr><td>${esc(c.name || c.id)}</td><td>${cell(c, '2w')}</td><td>${cell(c, '4w')}</td></tr>`).join('');
+    el.innerHTML = `<table><thead><tr><th>Category</th><th>2W avail/total</th><th>4W avail/total</th></tr></thead><tbody>${rows}</tbody></table>
+        <div class="sub" style="margin-top:6px">updated ${fmtTime(row.updatedAt)} · auto-adjusts on entry/exit</div>`;
 }
 
 function driveBoom(result) {
@@ -445,23 +473,25 @@ async function onSend(root) {
         action = 'movement-logs';
         if (!reg()) return toast('Enter a registration number', true);
         const cats = categoriesForSite(state.siteId);
-        const categoryId = ($('#f-cat', root) && $('#f-cat', root).value) || (cats[0] && cats[0].id) || uuid();
         const collection = buildCollection();
+        const time = (($('#f-time', root) && $('#f-time', root).value) || '').trim() || new Date().toISOString();
+        // categoryId is required by the DTO but ignored by ms-parking on movement-logs; we still
+        // send the REAL category from the matching request (entry/exit response) so it lines up.
         if (type === 'mlog-entry') {
-            // Utilization id is auto-derived from the last Request entry for this plate.
             const occ = occupancyForSite(state.siteId).find((o) => o.registrationNumber === reg());
-            const utilId = (occ && occ.utilizationId) || (latestLogPayload('request-entry', reg()) || {}).id;
+            const entryPayload = latestLogPayload('request-entry', reg()) || {};
+            const utilId = (occ && occ.utilizationId) || entryPayload.id;
             if (!utilId) return toast('Run Request entry for this vehicle first', true);
-            // time is intentionally omitted — ms-parking timestamps the movement itself.
-            const log = { id: utilId, vehicleNo: reg(), type: 'entry', categoryId, barrierId: code };
+            const categoryId = (occ && occ.category && occ.category.id) || (entryPayload.category && entryPayload.category.id) || (cats[0] && cats[0].id) || uuid();
+            const log = { id: utilId, vehicleNo: reg(), time, type: 'entry', categoryId, barrierId: code };
             if (collection) log.collection = collection;
             body = [log];
         } else {
-            // Vehicle-log id is auto-derived from the last Request exit for this plate.
-            const vlogId = (latestLogPayload('request-exit', reg()) || {}).id;
+            const exitPayload = latestLogPayload('request-exit', reg()) || {};
+            const vlogId = exitPayload.id;
             if (!vlogId) return toast('Run Request exit for this vehicle first', true);
-            // time is intentionally omitted — ms-parking timestamps the movement itself.
-            const log = { id: vlogId, vehicleNo: reg(), type: 'exit', categoryId, barrierId: code };
+            const categoryId = exitPayload.categoryId || (cats[0] && cats[0].id) || uuid();
+            const log = { id: vlogId, vehicleNo: reg(), time, type: 'exit', categoryId, barrierId: code };
             if (collection) log.collection = collection;
             body = [log];
         }
@@ -485,6 +515,7 @@ async function onSend(root) {
         // Only the entry/exit APIs physically open the barrier.
         if (action === 'request-entry' || action === 'request-exit') driveBoom(res.result);
         await refresh(true);
+        renderAvail(); // reflect the ±1 availability adjustment / any occupancy change
     } catch (e) { toast(e.message, true); } finally { if (sendBtn) sendBtn.disabled = false; }
 }
 
