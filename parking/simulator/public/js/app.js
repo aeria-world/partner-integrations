@@ -253,9 +253,11 @@ SCREENS.console = () => {
                 <select id="lc-code">${(b.barrierCodes || []).map((c) => `<option>${esc(c)}</option>`).join('') || '<option value="">(none set)</option>'}</select>
                 ${cats.length ? `<label>Category (for movement-log)</label><select id="lc-cat">${cats.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>` : ''}
                 <label>Collection amount (movement-log)</label>
-                <input id="lc-col-amount" type="number" min="0" placeholder="blank = none (entry) / amount due (exit)" />
+                <input id="lc-col-amount" type="number" min="0" placeholder="blank = don't send collection" />
                 <label>Collection mode</label>
                 <select id="lc-col-mode"><option value="cash">cash</option><option value="QR">QR</option><option value="card">card</option></select>
+                <label>Collection type</label>
+                <select id="lc-col-type"><option value="">(none)</option><option value="partner">partner</option></select>
                 <label>Error injection (FR-9)</label>
                 <select id="lc-inj">
                     <option value="none">none</option>
@@ -434,23 +436,25 @@ async function onLaneAction(act, root) {
         const categoryId = catEl ? catEl.value : uuid(); // required by DTO but unused server-side
         const colRaw = (($('#lc-col-amount', root) && $('#lc-col-amount', root).value) || '').trim();
         const colMode = ($('#lc-col-mode', root) && $('#lc-col-mode', root).value) || 'cash';
+        const colType = ($('#lc-col-type', root) && $('#lc-col-type', root).value) || '';
+        // Collection is sent ONLY when the operator enters an amount — never auto-filled.
+        const collection = colRaw !== '' ? { amount: Number(colRaw), mode: colMode, ...(colType ? { type: colType } : {}) } : null;
         if (act === 'mlog-entry') {
             // id must be the utilization id from the prior request-entry (ms-parking does getUtilizationById).
             const occ = occupancyForSite(state.siteId).find((o) => o.registrationNumber === reg);
             const utilId = (occ && occ.utilizationId) || (latestLogPayload('request-entry', reg) || {}).id;
             if (!utilId) return toast('No active entry for this vehicle — run Request Entry first', true);
-            const entry = { id: utilId, vehicleNo: reg, time: new Date().toISOString(), type: 'entry', categoryId, barrierId: code };
-            // Collection is optional on entry (syncEntryCollection only settles when one is sent).
-            if (colRaw !== '') entry.collection = { amount: Number(colRaw), mode: colMode };
-            body = [entry];
+            const log = { id: utilId, vehicleNo: reg, time: new Date().toISOString(), type: 'entry', categoryId, barrierId: code };
+            if (collection) log.collection = collection;
+            body = [log];
         } else {
             // id must be the vehicle-log id from the prior request-exit (getVehicleLogUsingId).
             const exitPayload = latestLogPayload('request-exit', reg);
             const vLogId = exitPayload && exitPayload.id;
             if (!vLogId) return toast('No request-exit found for this vehicle — run Request Exit first', true);
-            // logExitMovement destructures collection unconditionally → must send one to avoid a 500.
-            const amount = colRaw !== '' ? Number(colRaw) : (typeof exitPayload.amountToPay === 'number' ? exitPayload.amountToPay : 0);
-            body = [{ id: vLogId, vehicleNo: reg, time: new Date().toISOString(), type: 'exit', categoryId, barrierId: code, collection: { amount, mode: colMode } }];
+            const log = { id: vLogId, vehicleNo: reg, time: new Date().toISOString(), type: 'exit', categoryId, barrierId: code };
+            if (collection) log.collection = collection;
+            body = [log];
         }
     } else if (act === 'category-availability') {
         action = 'category-availability'; body = undefined;

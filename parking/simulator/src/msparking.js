@@ -81,8 +81,11 @@ function classifyResult(action, status, response, error) {
     if (error) return 'NETWORK_ERROR';
     if (status === 208) return 'ALREADY_REPORTED';
     if (status >= 400 || status === null) return 'DENIED';
-    const d = payloadOf(response);
-    if ((action === 'request-entry' || action === 'request-exit') && d && typeof d.pendingCollectionAmount === 'number' && d.pendingCollectionAmount > 0) {
+    const d = payloadOf(response) || {};
+    // Money outstanding must keep the barrier down: entry uses pendingCollectionAmount, exit uses amountToPay.
+    const due = (typeof d.pendingCollectionAmount === 'number' ? d.pendingCollectionAmount : 0)
+        || (typeof d.amountToPay === 'number' ? d.amountToPay : 0);
+    if ((action === 'request-entry' || action === 'request-exit') && due > 0) {
         return 'PAYMENT_DUE';
     }
     return 'ALLOWED';
