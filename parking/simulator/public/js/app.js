@@ -66,7 +66,7 @@ function render() {
     renderContext();
     renderNav();
     const main = $('#app');
-    const needsSite = ['barrier', 'console', 'tester', 'config', 'vehicles', 'occupancy', 'logs'];
+    const needsSite = ['console', 'config', 'occupancy', 'logs'];
     let screen = state.screen;
     // Pickers ('partner', 'site') render on demand; only deeper screens are force-redirected
     // when their prerequisites are missing. (Without this, selecting a partner traps you on
@@ -92,17 +92,14 @@ function renderContext() {
     if (barrier()) parts.push(`<span>${esc(barrier().name)} <span class="badge ${barrier().direction}">${barrier().direction}</span></span>`);
     c.innerHTML = parts.join('<span class="crumb-sep">▸</span>');
     $$('[data-nav]', c).forEach((a) => a.addEventListener('click', () => {
-        if (a.dataset.nav === 'partner') { setSel('siteId', null); setSel('barrierId', null); go('partner'); }
-        if (a.dataset.nav === 'site') { setSel('barrierId', null); go('barrier'); }
+        if (a.dataset.nav === 'partner') { go('partner'); }
+        if (a.dataset.nav === 'site') { go('site'); }
     }));
 }
 
 const NAV = [
-    ['barrier', 'Barriers'],
     ['console', 'Lane Console'],
-    ['tester', 'API Tester'],
     ['config', 'Configuration'],
-    ['vehicles', 'Vehicles & Whitelist'],
     ['occupancy', 'Occupancy'],
     ['logs', 'ms-parking Log'],
 ];
@@ -180,7 +177,7 @@ SCREENS.site = () => {
     </div>`;
 };
 BINDERS.site = (root) => {
-    $$('[data-pick]', root).forEach((b) => b.addEventListener('click', () => { setSel('siteId', b.dataset.pick); setSel('barrierId', null); go('barrier'); }));
+    $$('[data-pick]', root).forEach((b) => b.addEventListener('click', () => { setSel('siteId', b.dataset.pick); setSel('barrierId', null); go('console'); }));
     $('#ns-add', root).addEventListener('click', async () => {
         const name = $('#ns-name').value.trim(), integrationId = $('#ns-int').value.trim(), secretKey = $('#ns-sec').value.trim();
         if (!name || !integrationId || !secretKey) return toast('All fields required', true);
@@ -190,46 +187,34 @@ BINDERS.site = (root) => {
     });
 };
 
-// ---------- Barrier picker ----------
-SCREENS.barrier = () => {
-    const bars = barriersForSite(state.siteId);
-    return `
-    <h1>Barriers · ${esc(site().name)}</h1>
-    <p class="sub">Select a barrier to operate its lane. Add/edit barriers in <a data-goto="config" style="color:var(--accent);cursor:pointer">Configuration</a>.</p>
-    <div class="grid">
-        ${bars.length ? bars.map((b) => `
-            <button class="card pick" data-pick="${b.id}">
-                <div class="title">${esc(b.name)} <span class="badge ${b.direction}">${b.direction}</span></div>
-                <div class="meta">codes: ${esc((b.barrierCodes || []).join(', ') || '—')}</div>
-                <div style="margin-top:8px"><span class="badge">state: ${esc(b.state || 'CLOSED')}</span></div>
-            </button>`).join('') : '<div class="empty">No barriers yet — add one in Configuration.</div>'}
-    </div>`;
-};
-BINDERS.barrier = (root) => {
-    $$('[data-pick]', root).forEach((b) => b.addEventListener('click', () => { setSel('barrierId', b.dataset.pick); go('console'); }));
-    const g = $('[data-goto]', root); if (g) g.addEventListener('click', () => go('config'));
+// ---------- Lane Console (request builder) ----------
+// Each request type declares which input fields to render.
+const REQUESTS = {
+    'category-availability': { label: 'Category availability', fields: [] },
+    'request-entry': { label: 'Request entry', fields: ['reg', 'vtype', 'code'] },
+    'request-exit': { label: 'Request exit', fields: ['reg', 'code'] },
+    'mlog-entry': { label: 'Movement log — entry', fields: ['reg', 'utilId', 'code', 'collection'] },
+    'mlog-exit': { label: 'Movement log — exit', fields: ['reg', 'vlogId', 'code', 'collection'] },
+    'manual-exit': { label: 'Manual exit', fields: ['reg', 'entryTime', 'exitTime', 'remark', 'code', 'catId'] },
 };
 
-// ---------- Lane console ----------
 SCREENS.console = () => {
-    if (!state.barrierId) {
-        return `<h1>Lane Console</h1><div class="empty">Pick a barrier first.</div>
-            <div class="btnbar"><button class="btn primary" onclick="go('barrier')">Choose barrier</button></div>`;
+    const bars = barriersForSite(state.siteId);
+    if (!bars.length) {
+        return `<h1>Lane Console</h1>
+            <div class="empty">No barriers for this site yet. Add one in <a data-goto="config" style="color:var(--accent);cursor:pointer">Configuration</a>.</div>`;
     }
-    const b = barrier();
-    const dir = b.direction;
-    const showEntry = dir === 'entry' || dir === 'both';
-    const showExit = dir === 'exit' || dir === 'both';
-    const cats = categoriesForSite(state.siteId);
+    let b = barrier();
+    if (!b || b.siteId !== state.siteId) { b = bars[0]; setSel('barrierId', b.id); }
     const pay = (bindingFor(state.partnerId, state.siteId) || {}).paymentHandledBy || (partner().paymentHandledBy || 'aeria');
     return `
-    <h1>Lane Console · ${esc(b.name)} <span class="badge ${dir}">${dir}</span></h1>
+    <h1>Lane Console</h1>
     <p class="sub">Payments: <b>${esc(pay)}</b> — ${pay === 'partner' ? 'collect at gate (Phase 2 flow)' : 'ms-parking collects online'}</p>
     <div class="console">
         <div>
             <div id="display" class="display idle">
                 <div class="verdict">READY</div>
-                <div class="line">Enter a registration number and trigger the lane.</div>
+                <div class="line">Pick a request type, fill the fields, and Send.</div>
             </div>
             <div id="boom" class="card boom-CLOSED" style="margin-top:14px">
                 <div class="boom-wrap">
@@ -245,19 +230,10 @@ SCREENS.console = () => {
         </div>
         <div class="side">
             <div class="card">
-                <label>Registration number (reader)</label>
-                <input id="lc-reg" placeholder="KA01AB1234" value="KA01AB1234" />
-                <label>Vehicle type</label>
-                <select id="lc-type"><option value="4w">4w</option><option value="2w">2w</option></select>
-                <label>Barrier code</label>
-                <select id="lc-code">${(b.barrierCodes || []).map((c) => `<option>${esc(c)}</option>`).join('') || '<option value="">(none set)</option>'}</select>
-                ${cats.length ? `<label>Category (for movement-log)</label><select id="lc-cat">${cats.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>` : ''}
-                <label>Collection amount (movement-log)</label>
-                <input id="lc-col-amount" type="number" min="0" placeholder="blank = don't send collection" />
-                <label>Collection mode</label>
-                <select id="lc-col-mode"><option value="cash">cash</option><option value="QR">QR</option><option value="card">card</option></select>
-                <label>Collection type</label>
-                <select id="lc-col-type"><option value="">(none)</option><option value="partner">partner</option></select>
+                <label>Barrier</label>
+                <select id="lc-barrier">${bars.map((x) => `<option value="${x.id}" ${x.id === b.id ? 'selected' : ''}>${esc(x.name)} (${x.direction})</option>`).join('')}</select>
+                <label>Request type</label>
+                <select id="lc-req">${Object.entries(REQUESTS).map(([k, v]) => `<option value="${k}">${esc(v.label)}</option>`).join('')}</select>
                 <label>Error injection (FR-9)</label>
                 <select id="lc-inj">
                     <option value="none">none</option>
@@ -266,28 +242,66 @@ SCREENS.console = () => {
                 </select>
             </div>
             <div class="card">
-                <div class="btnbar" style="margin-top:0">
-                    ${showEntry ? `<button class="btn primary" data-act="request-entry">Request Entry</button>` : ''}
-                    ${showExit ? `<button class="btn primary" data-act="request-exit">Request Exit</button>` : ''}
-                    ${showEntry ? `<button class="btn" data-act="mlog-entry">Log Entry</button>` : ''}
-                    ${showExit ? `<button class="btn" data-act="mlog-exit">Log Exit</button>` : ''}
-                    <button class="btn ghost" data-act="force-open">Force open</button>
-                </div>
+                <div id="lc-fields"></div>
+                <div class="btnbar"><button class="btn primary" id="lc-send">Send request</button><button class="btn ghost" id="lc-force">Force open</button></div>
             </div>
             <div class="card">
                 <div class="inline"><h2 style="margin:0">Availability</h2><span class="spacer"></span><button class="btn sm" id="lc-avail-snap">Snapshot</button></div>
-                <div id="lc-avail" style="margin-top:10px"><div class="empty">No snapshot yet — click Snapshot before and after an entry/exit to see the bay count change.</div></div>
+                <div id="lc-avail" style="margin-top:10px"><div class="empty">No snapshot yet — Snapshot before/after an entry-exit to see the bay count change.</div></div>
             </div>
         </div>
     </div>`;
 };
 BINDERS.console = (root) => {
-    if (!state.barrierId) return;
-    $$('[data-act]', root).forEach((btn) => btn.addEventListener('click', () => onLaneAction(btn.dataset.act, root)));
+    const g = $('[data-goto]', root);
+    if (g) { g.addEventListener('click', () => go('config')); return; } // no-barriers empty state
+    const barSel = $('#lc-barrier', root);
+    barSel.addEventListener('change', () => { setSel('barrierId', barSel.value); renderReqFields(root); });
+    $('#lc-req', root).addEventListener('change', () => renderReqFields(root));
+    renderReqFields(root);
+    $('#lc-send', root).addEventListener('click', () => onSend(root));
+    $('#lc-force', root).addEventListener('click', () => forceOpen(root));
     const snap = $('#lc-avail-snap', root);
     if (snap) snap.addEventListener('click', () => snapAvailability(snap));
     renderAvail();
 };
+
+// One input group per field key.
+function reqFieldHtml(key, b) {
+    const codes = b.barrierCodes || [];
+    switch (key) {
+        case 'reg': return `<label>Registration number</label><input id="f-reg" value="KA01AB1234" />`;
+        case 'vtype': return `<label>Vehicle type</label><select id="f-vtype"><option value="4w">4w</option><option value="2w">2w</option></select>`;
+        case 'code': return `<label>Barrier code</label><select id="f-code">${codes.map((c) => `<option>${esc(c)}</option>`).join('') || '<option value="">(none set)</option>'}</select>`;
+        case 'utilId': return `<label>Utilization id <span style="font-weight:400;color:var(--muted)">(blank = auto from last entry)</span></label><input id="f-util" placeholder="auto" />`;
+        case 'vlogId': return `<label>Vehicle-log id <span style="font-weight:400;color:var(--muted)">(blank = auto from last exit)</span></label><input id="f-vlog" placeholder="auto" />`;
+        case 'entryTime': return `<label>Entry time (ISO)</label><input id="f-entry" value="${new Date(Date.now() - 3600000).toISOString()}" />`;
+        case 'exitTime': return `<label>Exit time (ISO)</label><input id="f-exit" value="${new Date().toISOString()}" />`;
+        case 'remark': return `<label>Remark</label><input id="f-remark" placeholder="optional" />`;
+        case 'catId': {
+            const cats = categoriesForSite(state.siteId);
+            return `<label>Category id</label>${cats.length
+                ? `<select id="f-cat">${cats.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>`
+                : `<input id="f-cat" placeholder="category uuid (optional)" />`}`;
+        }
+        case 'collection': return `
+            <label>Collection amount <span style="font-weight:400;color:var(--muted)">(blank = don't send collection)</span></label>
+            <input id="f-col-amount" type="number" min="0" placeholder="blank = none" />
+            <label>Collection mode</label>
+            <select id="f-col-mode"><option value="cash">cash</option><option value="QR">QR</option><option value="card">card</option></select>
+            <label>Collection type</label>
+            <select id="f-col-type"><option value="">(none)</option><option value="partner">partner</option></select>`;
+        default: return '';
+    }
+}
+function renderReqFields(root) {
+    const container = $('#lc-fields', root);
+    if (!container) return;
+    const type = $('#lc-req', root).value;
+    const b = barrier() || {};
+    const fields = (REQUESTS[type] || {}).fields || [];
+    container.innerHTML = fields.length ? fields.map((k) => reqFieldHtml(k, b)).join('') : '<div class="empty" style="padding:8px">No fields — just Send.</div>';
+}
 
 // Fetch category-availability and render current counts with a delta vs the previous snapshot.
 async function snapAvailability(btn) {
@@ -382,7 +396,7 @@ function updateDisplay(action, res) {
     const payload = getPayload(res.response);
     d.className = 'display ' + outcome;
     const lines = [];
-    const reg = $('#lc-reg') ? $('#lc-reg').value : '';
+    const reg = $('#f-reg') ? $('#f-reg').value : '';
     if (payload && typeof payload === 'object') {
         if (payload.bay && (payload.bay.name || payload.bay.location)) lines.push(`Bay: ${esc(payload.bay.name || '')} ${esc(payload.bay.location || '')}`);
         if (payload.category && payload.category.name) lines.push(`Category: ${esc(payload.category.name)}`);
@@ -405,111 +419,88 @@ function updateDisplay(action, res) {
     $('#rawout').textContent = JSON.stringify(res.response ?? res.error, null, 2);
 }
 
-async function onLaneAction(act, root) {
-    const b = barrier();
-    const reg = ($('#lc-reg', root).value || '').trim();
-    const code = $('#lc-code', root) ? $('#lc-code', root).value : '';
+function forceOpen(root) {
+    driveBoom('ALLOWED');
+    const d = $('#display'); if (!d) return;
+    const reg = ($('#f-reg', root) && $('#f-reg', root).value) || '—';
+    d.className = 'display ALLOWED';
+    d.innerHTML = `<div class="plate">${esc(reg)}</div><div class="verdict">FORCE OPENED</div><div class="line">Manual guard override (not sent to ms-parking).</div>`;
+}
+
+async function onSend(root) {
+    const type = $('#lc-req', root).value;
+    const b = barrier() || {};
+    const code = $('#f-code', root) ? $('#f-code', root).value : undefined;
     const injection = $('#lc-inj', root).value;
     const overrides = injection === 'none' ? {} : { signatureMode: injection };
+    const reg = () => (($('#f-reg', root) && $('#f-reg', root).value) || '').trim();
+    const buildCollection = () => {
+        const el = $('#f-col-amount', root);
+        if (!el) return null;
+        const raw = (el.value || '').trim();
+        if (raw === '') return null; // only sent when the operator enters an amount
+        const mode = ($('#f-col-mode', root) && $('#f-col-mode', root).value) || 'cash';
+        const t = ($('#f-col-type', root) && $('#f-col-type', root).value) || '';
+        return { amount: Number(raw), mode, ...(t ? { type: t } : {}) };
+    };
 
-    if (act === 'force-open') {
-        driveBoom('ALLOWED');
-        const d = $('#display'); d.className = 'display ALLOWED';
-        d.innerHTML = `<div class="plate">${esc(reg || '—')}</div><div class="verdict">FORCE OPENED</div><div class="line">Manual guard override (not sent to ms-parking).</div>`;
-        return;
-    }
-
-    let action = act, body;
-    if (act === 'request-entry') {
-        if (!reg) return toast('Enter a registration number', true);
-        const v = db().vehicles.find((x) => x.registrationNumber === reg);
-        // ms-parking requires vehicle.type for the visitor/on-spot path (non-whitelisted plates).
-        const vType = ($('#lc-type', root) && $('#lc-type', root).value) || (v && v.type) || '4w';
-        body = { vehicle: { registrationNumber: reg, type: vType }, barrierId: code };
-    } else if (act === 'request-exit') {
-        if (!reg) return toast('Enter a registration number', true);
-        body = { vehicleNo: reg, barrierId: code };
-    } else if (act === 'mlog-entry' || act === 'mlog-exit') {
+    let action = type, body;
+    if (type === 'category-availability') {
+        action = 'category-availability'; body = undefined;
+    } else if (type === 'request-entry') {
+        if (!reg()) return toast('Enter a registration number', true);
+        const vtype = ($('#f-vtype', root) && $('#f-vtype', root).value) || '4w';
+        body = { vehicle: { registrationNumber: reg(), type: vtype }, barrierId: code };
+    } else if (type === 'request-exit') {
+        if (!reg()) return toast('Enter a registration number', true);
+        body = { vehicleNo: reg(), barrierId: code };
+    } else if (type === 'mlog-entry' || type === 'mlog-exit') {
         action = 'movement-logs';
-        if (!reg) return toast('Enter a registration number', true);
-        const catEl = $('#lc-cat', root);
-        const categoryId = catEl ? catEl.value : uuid(); // required by DTO but unused server-side
-        const colRaw = (($('#lc-col-amount', root) && $('#lc-col-amount', root).value) || '').trim();
-        const colMode = ($('#lc-col-mode', root) && $('#lc-col-mode', root).value) || 'cash';
-        const colType = ($('#lc-col-type', root) && $('#lc-col-type', root).value) || '';
-        // Collection is sent ONLY when the operator enters an amount — never auto-filled.
-        const collection = colRaw !== '' ? { amount: Number(colRaw), mode: colMode, ...(colType ? { type: colType } : {}) } : null;
-        if (act === 'mlog-entry') {
-            // id must be the utilization id from the prior request-entry (ms-parking does getUtilizationById).
-            const occ = occupancyForSite(state.siteId).find((o) => o.registrationNumber === reg);
-            const utilId = (occ && occ.utilizationId) || (latestLogPayload('request-entry', reg) || {}).id;
-            if (!utilId) return toast('No active entry for this vehicle — run Request Entry first', true);
-            const log = { id: utilId, vehicleNo: reg, time: new Date().toISOString(), type: 'entry', categoryId, barrierId: code };
+        if (!reg()) return toast('Enter a registration number', true);
+        const cats = categoriesForSite(state.siteId);
+        const categoryId = ($('#f-cat', root) && $('#f-cat', root).value) || (cats[0] && cats[0].id) || uuid();
+        const collection = buildCollection();
+        if (type === 'mlog-entry') {
+            let utilId = (($('#f-util', root) && $('#f-util', root).value) || '').trim();
+            if (!utilId) {
+                const occ = occupancyForSite(state.siteId).find((o) => o.registrationNumber === reg());
+                utilId = (occ && occ.utilizationId) || (latestLogPayload('request-entry', reg()) || {}).id;
+            }
+            if (!utilId) return toast('No utilization id — run Request entry first, or enter one', true);
+            const log = { id: utilId, vehicleNo: reg(), time: new Date().toISOString(), type: 'entry', categoryId, barrierId: code };
             if (collection) log.collection = collection;
             body = [log];
         } else {
-            // id must be the vehicle-log id from the prior request-exit (getVehicleLogUsingId).
-            const exitPayload = latestLogPayload('request-exit', reg);
-            const vLogId = exitPayload && exitPayload.id;
-            if (!vLogId) return toast('No request-exit found for this vehicle — run Request Exit first', true);
-            const log = { id: vLogId, vehicleNo: reg, time: new Date().toISOString(), type: 'exit', categoryId, barrierId: code };
+            let vlogId = (($('#f-vlog', root) && $('#f-vlog', root).value) || '').trim();
+            if (!vlogId) vlogId = (latestLogPayload('request-exit', reg()) || {}).id;
+            if (!vlogId) return toast('No vehicle-log id — run Request exit first, or enter one', true);
+            const log = { id: vlogId, vehicleNo: reg(), time: new Date().toISOString(), type: 'exit', categoryId, barrierId: code };
             if (collection) log.collection = collection;
             body = [log];
         }
-    } else if (act === 'category-availability') {
-        action = 'category-availability'; body = undefined;
+    } else if (type === 'manual-exit') {
+        if (!reg()) return toast('Enter a registration number', true);
+        const catVal = ($('#f-cat', root) && $('#f-cat', root).value) || '';
+        body = {
+            vehicleNo: reg(),
+            entryTime: ($('#f-entry', root) && $('#f-entry', root).value) || undefined,
+            exitTime: ($('#f-exit', root) && $('#f-exit', root).value) || undefined,
+            remark: ($('#f-remark', root) && $('#f-remark', root).value) || undefined,
+            barrierId: code,
+            ...(catVal ? { categoryId: catVal } : {}),
+        };
     }
 
-    setBusy(root, true);
+    const sendBtn = $('#lc-send', root);
+    if (sendBtn) sendBtn.disabled = true;
     try {
         const res = await API.call({ partnerId: state.partnerId, siteId: state.siteId, barrierId: state.barrierId, action, body, overrides });
         updateDisplay(action, res);
-        // Only the entry/exit APIs physically open the barrier. Movement-logs and
-        // category-availability must never drive the boom.
+        // Only the entry/exit APIs physically open the barrier.
         if (action === 'request-entry' || action === 'request-exit') driveBoom(res.result);
-        await refresh(true); // pick up occupancy/log changes in the background
-    } catch (e) {
-        toast(e.message, true);
-    } finally {
-        setBusy(root, false);
-    }
+        await refresh(true);
+    } catch (e) { toast(e.message, true); } finally { if (sendBtn) sendBtn.disabled = false; }
 }
-function setBusy(root, busy) { $$('[data-act]', root).forEach((b) => (b.disabled = busy)); }
-
-// ---------- API Tester ----------
-const TESTER_SAMPLES = {
-    'category-availability': null,
-    'request-entry': { vehicle: { registrationNumber: 'KA01AB1234', type: '4w' }, barrierId: 'GATE-A-IN' },
-    'request-exit': { vehicleNo: 'KA01AB1234', barrierId: 'GATE-A-OUT' },
-    'movement-logs': [{ id: '00000000-0000-0000-0000-000000000001', vehicleNo: 'KA01AB1234', time: new Date().toISOString(), type: 'entry', categoryId: '00000000-0000-0000-0000-000000000002', barrierId: 'GATE-A-IN' }],
-    'manual-exit': { vehicleNo: 'KA01AB1234', entryTime: new Date(Date.now() - 3600000).toISOString(), exitTime: new Date().toISOString(), remark: 'manual', barrierId: 'GATE-A-OUT' },
-};
-SCREENS.tester = () => `
-    <h1>API Tester</h1>
-    <p class="sub">Fire any of the 5 partner APIs with a custom body. Request is signed server-side for the current (partner, site).</p>
-    ${Object.keys(TESTER_SAMPLES).map((a) => `
-        <div class="card">
-            <div class="inline"><b>${a}</b><span class="spacer"></span><span class="pill">${a === 'category-availability' ? 'GET' : 'POST'}</span></div>
-            ${a === 'category-availability' ? '' : `<label>Body (JSON)</label><textarea id="t-${a}">${esc(JSON.stringify(TESTER_SAMPLES[a], null, 2))}</textarea>`}
-            <div class="btnbar"><button class="btn primary" data-test="${a}">Send</button></div>
-            <pre class="json" id="tr-${a}" hidden></pre>
-        </div>`).join('')}`;
-BINDERS.tester = (root) => {
-    $$('[data-test]', root).forEach((btn) => btn.addEventListener('click', async () => {
-        const a = btn.dataset.test;
-        let body;
-        if (a !== 'category-availability') {
-            try { body = JSON.parse($('#t-' + a, root).value); } catch (e) { return toast('Invalid JSON: ' + e.message, true); }
-        }
-        btn.disabled = true;
-        try {
-            const res = await API.call({ partnerId: state.partnerId, siteId: state.siteId, action: a, body });
-            const out = $('#tr-' + a, root); out.hidden = false;
-            out.textContent = `HTTP ${res.status} · ${res.latencyMs}ms · ${res.result}\nx-signature: ${res.signature}\n\n` + JSON.stringify(res.response ?? res.error, null, 2);
-            await refresh(true);
-        } catch (e) { toast(e.message, true); } finally { btn.disabled = false; }
-    }));
-};
 
 // ---------- Configuration ----------
 SCREENS.config = () => {
@@ -641,51 +632,6 @@ function bindGenericSections(root) {
         $$('[data-gdel]', card).forEach((b) => b.addEventListener('click', async () => { await API.remove(collection, b.dataset.gdel); await refresh(); }));
     });
 }
-
-// ---------- Vehicles & Whitelist ----------
-SCREENS.vehicles = () => `
-    <h1>Vehicles & Whitelist</h1>
-    <p class="sub">Vehicles are a global registry. Whitelisting is <b>per site</b> — added to <b>${esc(site().name)}</b>.</p>
-    <div class="card">
-        <h2 style="margin-top:0">Vehicle registry</h2>
-        <table><thead><tr><th>Reg. no</th><th>Type</th><th>Model</th><th>Colour</th><th></th></tr></thead><tbody>
-        ${db().vehicles.map((v) => `<tr><td class="mono">${esc(v.registrationNumber)}</td><td>${esc(v.type || '')}</td><td>${esc(v.model || '')}</td><td>${esc(v.color || '')}</td>
-            <td><button class="btn sm" data-wl="${esc(v.registrationNumber)}">Whitelist here</button> <button class="btn sm danger" data-dv="${esc(v.registrationNumber)}">Delete</button></td></tr>`).join('') || '<tr><td colspan="5" class="empty">None</td></tr>'}
-        </tbody></table>
-        <div class="row" style="margin-top:12px">
-            <div><label>Reg. no</label><input id="v-reg" placeholder="KA01AB1234" /></div>
-            <div><label>Type</label><select id="v-type"><option value="4w">4w</option><option value="2w">2w</option></select></div>
-            <div><label>Model</label><input id="v-model" /></div>
-            <div><label>Colour</label><input id="v-color" /></div>
-        </div>
-        <div class="btnbar"><button class="btn primary" id="v-add">Add vehicle</button></div>
-    </div>
-    <div class="card">
-        <h2 style="margin-top:0">Whitelist · ${esc(site().name)}</h2>
-        <table><thead><tr><th>Reg. no</th><th>Category</th><th>Valid till</th><th></th></tr></thead><tbody>
-        ${whitelistForSite(state.siteId).map((w) => `<tr><td class="mono">${esc(w.registrationNumber)}</td>
-            <td>${esc((categoriesForSite(state.siteId).find((c) => c.id === w.categoryId) || {}).name || '—')}</td>
-            <td>${fmtTime(w.validTill)}</td>
-            <td><button class="btn sm danger" data-dw="${w.id}">Remove</button></td></tr>`).join('') || '<tr><td colspan="4" class="empty">None</td></tr>'}
-        </tbody></table>
-    </div>`;
-BINDERS.vehicles = (root) => {
-    $('#v-add', root).addEventListener('click', async () => {
-        const reg = $('#v-reg').value.trim();
-        if (!reg) return toast('Reg. no required', true);
-        try {
-            await API.create('vehicles', { registrationNumber: reg, type: $('#v-type').value, model: $('#v-model').value.trim(), color: $('#v-color').value.trim() });
-            await refresh(); toast('Vehicle added');
-        } catch (e) { toast(e.message, true); }
-    });
-    $$('[data-dv]', root).forEach((b) => b.addEventListener('click', async () => { await API.remove('vehicles', b.dataset.dv); await refresh(); }));
-    $$('[data-wl]', root).forEach((b) => b.addEventListener('click', async () => {
-        const cat = categoriesForSite(state.siteId)[0];
-        await API.create('whitelist', { registrationNumber: b.dataset.wl, siteId: state.siteId, categoryId: cat ? cat.id : null, validFrom: new Date().toISOString(), validTill: new Date(Date.now() + 365 * 864e5).toISOString(), source: 'manual' });
-        await refresh(); toast('Whitelisted for this site');
-    }));
-    $$('[data-dw]', root).forEach((b) => b.addEventListener('click', async () => { await API.remove('whitelist', b.dataset.dw); await refresh(); }));
-};
 
 // ---------- Occupancy ----------
 SCREENS.occupancy = () => {
