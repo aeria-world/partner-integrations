@@ -721,8 +721,12 @@ paths:
                 userId:
                   type: string
                   example: user1-0000-0000-0000-000000000000
-                allowedRegistartionNumbers:
+                allowedRegistrationNumbers:
                   type: array
+                  description: >-
+                    NOTE: the live partner endpoint currently requires the field
+                    name 'allowedRegistartionNumbers' (misspelled). Rename pending
+                    partner migration.
                   items:
                     type: string
                     example: MH01AB1234
@@ -744,7 +748,7 @@ paths:
               required:
                 - integrationId
                 - userId
-                - allowedRegistartionNumbers
+                - allowedRegistrationNumbers
                 - bay
       responses:
         '200':
@@ -773,7 +777,7 @@ paths:
                 userId:
                   type: string
                   example: user1-0000-0000-0000-000000000000
-                allowedRegistartionNumbers:
+                allowedRegistrationNumbers:
                   type: array
                   items:
                     type: string
@@ -799,7 +803,7 @@ paths:
               required:
                 - integrationId
                 - userId
-                - allowedRegistartionNumbers
+                - allowedRegistrationNumbers
                 - flexiCategoryIds
       responses:
         '200':
@@ -858,7 +862,7 @@ paths:
                 bookingId:
                   type: string
                   example: user1-0000-0000-0000-000000000000
-                allowedRegistartionNumbers:
+                allowedRegistrationNumbers:
                   type: array
                   items:
                     type: string
@@ -880,7 +884,7 @@ paths:
               required:
                 - integrationId
                 - bookingId
-                - allowedRegistartionNumbers
+                - allowedRegistrationNumbers
                 - vehicleType
                 - validFrom
                 - validTill
