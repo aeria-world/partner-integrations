@@ -744,7 +744,7 @@ paths:
               required:
                 - integrationId
                 - userId
-                - registeredVehicles
+                - allowedRegistartionNumbers
                 - bay
       responses:
         '200':
@@ -799,7 +799,7 @@ paths:
               required:
                 - integrationId
                 - userId
-                - registeredVehicles
+                - allowedRegistartionNumbers
                 - flexiCategoryIds
       responses:
         '200':
