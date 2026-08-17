@@ -4,8 +4,8 @@
 
 | | |
 |---|---|
-| Version | 1.0 (Active) |
-| Date | 23 July 2026 |
+| Version | 1.1 (Active) |
+| Date | 17 August 2026 |
 | Prepared by | Aeria |
 | Audience | Any parking infrastructure partner (gates, LPR, pay stations) and site stakeholders |
 | Scope | Partner-agnostic and site-agnostic. Engagement-specific scope, phasing, and commercials live in a separate per-partner document. |
@@ -30,6 +30,12 @@ For every vehicle movement the partner either:
 and in both cases **confirms the actual movement back to Aeria** (flow F4) so billing, reconciliation, and analytics are complete.
 
 **Execution channels.** The partner's automated infrastructure (ANPR + boom barrier) is one execution channel for gate decisions. Aeria's **property guard app** is a parallel, manual channel: working off the number plate, it triggers the same authorization and movement flows against the same system of record. A site can operate both channels side by side (the guard app doubling as the operational backup when the automated path can't handle a vehicle) or run on the guard app alone. Where partner hardware controls the physical barrier, the guard-app channel actuates it through the remote-open steps (S12/S13); movements that occur outside the partner's channel entirely are notified to it (S15) so its local session state stays coherent.
+
+**Where the truth lives.** Both systems necessarily hold overlapping data, so the integration assumes one rule about which system owns each domain. Aeria is the system of record for **people and tenants, vehicles and entitlements, bookings, tariffs and pricing rules, payments taken in-app and tenant billing, parking categories and their capacity policy, the parking structure it models (zones, bays, allocation) and the checkpoint definitions that map to partner equipment**. The partner is the system of record for **its own equipment and identifiers, the operational state of that equipment, and the movements its equipment observes**. Where movements arise on more than one channel, each side is authoritative for what it directly observed and **Aeria holds the consolidated history**, since it is the only system receiving every channel — which is also what makes reconciliation possible.
+
+This follows from the model above rather than from preference: Aeria computes fares, invoices tenants and reconciles across channels, none of which works if the same data is authored in two places.
+
+Local operation means a partner necessarily holds a **copy** of several Aeria-owned items — entitlements, bookings, category references — so a gate can decide without asking. Those copies are **replicas: maintained through the steps below and not altered independently on site.** Where an engagement additionally requires partner-side rate or category configuration, its maintenance is agreed in that engagement; there is no tariff-synchronisation step in this model today. The discipline matters either way: a value edited directly in the partner system makes the two systems disagree silently — Aeria invoices one amount while the gate collected another, and the difference surfaces at reconciliation with nothing to show which was intended. Where an on-site change is unavoidable, it needs to be visible to Aeria so the replica can be re-synchronised rather than quietly diverge.
 
 **Site scoping.** One integration is established once between Aeria and the partner. Each deployed site runs as a separate, configuration-scoped integration instance (own credentials, own gate topology, own categories and tariffs). Scaling from one site to many is a matter of provisioning instances and configuration — not re-integration.
 
@@ -106,7 +112,7 @@ Each step states its direction, trigger, and the **semantic data** exchanged. Fi
 
 | Step | Trigger | Data | Expectations |
 |---|---|---|---|
-| **S9 Movement report** *(Partner → Aeria)* | Every physical entry/exit (singly or batched) | Movement type (entry/exit); plate; timestamp; gate identity; category; collection made at the gate — amount **and** method (cash / card / UPI / FASTag / other) | **Idempotent and batchable**; must cover movements decided locally while offline; gate identity mandatory for revenue attribution |
+| **S9 Movement report** *(Partner → Aeria)* | Every physical entry/exit (singly or batched) — where a partner cannot push, the same evidence is obtained by retrieval (S10) | Movement type (entry/exit); plate; timestamp; gate identity; category; collection made at the gate — amount **and** method (cash / card / UPI / FASTag / other) | **Idempotent and batchable**; must cover movements decided locally while offline; gate identity mandatory for revenue attribution |
 | **S10 Movement retrieval** *(Aeria-initiated pull)* | Aeria audit / gap detection | In: time range. Out: the partner's raw movement (and, where used for financial reconciliation, collection) records for the range | **Conditional, transport-neutral** (pull API or scheduled export): required where completeness of the S9 push path cannot be established; otherwise an audit enhancement |
 | **S15 Movement notification** *(Aeria → Partner)* | A movement occurs outside the partner's channel (e.g. a guard-operated lane) at a site where the partner also operates | Movements, singly or **batched** — per item: plate; movement type (entry/exit); timestamp; category; session reference; for entries, the **settlement horizon (paid-upto)** as of the movement | **Only movements the partner did not originate or witness** — never an echo of its own S9 reports. Batching mirrors S9: after a partner-side outage, Aeria collates pending notifications and delivers them together. Items apply independently, idempotent by movement reference, order-insensitive (each carries its timestamp). Advisory: lets the partner create the local entry record (so its lane can automate the eventual exit) or close a stale one (occupancy, anti-passback hygiene); partner-side state remains non-authoritative per §7 |
 
@@ -136,28 +142,28 @@ Each step states its direction, trigger, and the **semantic data** exchanged. Fi
 - **Online path** — the parking system asks Aeria at the decision point (F3). Sufficient on its own where the site can depend on live Aeria responses.
 - **Local (offline-capable) path** — the parking system receives synced data (F1/F2/F5) and decides locally. Required where the site must keep operating without live Aeria decisioning; sufficient on its own where local decisioning is the preferred mode.
 - **Either path alone delivers the capability — unless the cell says otherwise.** Cells qualified in parentheses (e.g. "exit side only", "degraded") state exactly what the local path covers; the §7 degradation envelope governs the rest. `S6 + S7` means both steps of that path.
-- **Conditional / enhancing** steps are not part of any minimum path: S10 becomes required only where completeness of the S9 push cannot be established (§4); S12/S13 are the asynchronous completion of pending requests (guard decisions, in-app payment at the barrier) and are needed wherever those flows are active.
+- **Conditional / enhancing** steps are not part of any minimum path. S10 is the retrieval form of movement evidence: required where a partner cannot push (S9) or where push completeness cannot be established (§4); S12/S13 are the asynchronous completion of pending requests (guard decisions, in-app payment at the barrier) and are needed wherever those flows are active.
 
 | Capability | Always | Online path | Local (offline-capable) path | Conditional / enhancing |
 |---|---|---|---|---|
 | C1 Vehicle registration | — | — (registration is Aeria-side; the gate resolves via S6/S7) | S1 + S2 | |
-| C2 Fixed parking | S9 | S6 + S7 | S1 + S2 | S10 |
-| C3 Flexi parking | S9 | S6 + S7 | S1 + S2 | S8, S10 |
-| C4 Paid property parking | S9 | S6 + S7 (the gate opt-in completes via S12) | S3 + S5 (pre-booked; S4 for extensions) | S10, S11 |
-| C5 Pay-per-use visitor (anonymous) | S9 | S6 + S7 + S8 | S8 counters + default-category admission (**degraded**: no offline fare computation — fares settle post-hoc via S9/S14 per §7) | S11, S10, S14 |
-| C6 Pre-booking / reservation | S9 | S6 + S7 | S3 + S4 + S5 | S8, S10, S11 |
-| C7 Priority / VIP visitor | S9 | S6 + S7 (re-categorization surfaces in the S7 fare) | S11 (**exit side only** — local free exit for validated sessions; entry follows the C2/C5/C6 paths) | S3 (pre-approved plates), S12 |
-| C8 Hosted walk-in visitors | S9 | S6 + S7 | S11 (**exit side only**; entry follows the visitor paths) | S3, S5, S8, S12, S14 |
-| C9 Occupancy & availability | S9 | S8 | S8 baseline + local ± counters | S10 |
-| C10 Central fare computation | S9 | S6 + S7 (fares arrive in the responses) | — (pricing never runs partner-side; offline covers horizon-based free exit only) | S14 |
+| C2 Fixed parking | S9 or S10 | S6 + S7 | S1 + S2 | S10 |
+| C3 Flexi parking | S9 or S10 | S6 + S7 | S1 + S2 | S8, S10 |
+| C4 Paid property parking | S9 or S10 | S6 + S7 (the gate opt-in completes via S12) | S3 + S5 (pre-booked; S4 for extensions) | S10, S11 |
+| C5 Pay-per-use visitor (anonymous) | S9 or S10 | S6 + S7 + S8 | S8 counters + default-category admission (**degraded**: no offline fare computation — fares settle post-hoc via S9/S14 per §7) | S11, S10, S14 |
+| C6 Pre-booking / reservation | S9 or S10 | S6 + S7 | S3 + S4 + S5 | S8, S10, S11 |
+| C7 Priority / VIP visitor | S9 or S10 | S6 + S7 (re-categorization surfaces in the S7 fare) | S11 (**exit side only** — local free exit for validated sessions; entry follows the C2/C5/C6 paths) | S3 (pre-approved plates), S12 |
+| C8 Hosted walk-in visitors | S9 or S10 | S6 + S7 | S11 (**exit side only**; entry follows the visitor paths) | S3, S5, S8, S12, S14 |
+| C9 Occupancy & availability | S9 or S10 | S8 | S8 baseline + local ± counters | S10 |
+| C10 Central fare computation | S9 or S10 | S6 + S7 (fares arrive in the responses) | — (no tariff-synchronisation step exists; where a partner must price locally from its own rate configuration, that arrangement and its maintenance are agreed per engagement) | S14 |
 | C11 Revenue reconciliation | S9 (with collection detail) | S7 | — (reconciliation is Aeria-side) | S10, S14 |
-| C12 Movement audit | S9 | — | — | S10 |
+| C12 Movement audit | S9 or S10 | — | — | S10 |
 | C13 Offline-tolerant operation | S9 (offline catch-up) | *n/a* | **The local-path column of every activated capability** (F1/F2/F5 sync + S8 counters) | |
-| C14 Online payments | S9 | S7 (settle at exit) | S11 (paid-upto sync) | S3 + S4 (booking-shaped), S13 (in-app payment at the barrier) |
-| C15 Multi-entry passes | S9 | S6 + S7 | S1 + S2 | S3 |
-| C16 Company cab / fleet | S9 | S6 + S7 | S1 + S2 | S10, S14 |
+| C14 Online payments | S9 or S10 | S7 (settle at exit) | S11 (paid-upto sync) | S3 + S4 (booking-shaped), S13 (in-app payment at the barrier) |
+| C15 Multi-entry passes | S9 or S10 | S6 + S7 | S1 + S2 | S3 |
+| C16 Company cab / fleet | S9 or S10 | S6 + S7 | S1 + S2 | S10, S14 |
 
-Reading column-wise still justifies the ask: **S9 is the backbone** — every capability requires it in every mode. S15 (movement notification) is not in the table: it is **topology-driven, not capability-driven** — it applies wherever a site runs the partner channel alongside another execution channel (§2), regardless of which capabilities are active.
+Reading column-wise still justifies the ask: **movement evidence is the backbone** — every capability requires it in every mode, delivered by push (S9) or retrieval (S10). S15 (movement notification) is not in the table: it is **topology-driven, not capability-driven** — it applies wherever a site runs the partner channel alongside another execution channel (§2), regardless of which capabilities are active.
 
 ## 6. Execution formats and adapters
 
@@ -186,7 +192,7 @@ Reading column-wise still justifies the ask: **S9 is the backbone** — every ca
 - **Authentication:** every call in either direction is authenticated and integrity-protected. The reference contract uses a signed-request scheme (HMAC-SHA256 over the payload with a per-site shared secret, timestamped with a bounded replay window); an equivalent partner-native scheme is acceptable via the adapter.
 - **Site instances:** credentials and configuration are scoped per site; multi-site = multiple instances of the same integration.
 - **Idempotency:** every partner-initiated call supports an optional **partner-supplied idempotency key** — unique within the integration, any stable pattern — for exact deduplication: re-submissions with the same key return the identical response. Without a key, deduplication falls back to natural keys: movement reporting (S9) on vehicle + time + movement type; authorization (S6/S7) on the vehicle's pending/open session; manual settlement (S14) on vehicle + entry/exit times. Exit requests may additionally carry the **session reference received at entry**, making session resolution explicit rather than plate-inferred. Session references and movement identifiers are distinct: a movement identifier is unique **per physical movement** — never reuse a session reference across an entry and its exit.
-- **Completeness:** every movement and every collection — including FASTag-collected fares and offline-period movements — must reach Aeria (push S9 and/or pull S10). Partial feeds undermine billing and analytics. The reverse also holds in dual-channel operation: movements can originate on the guard-app channel, so the partner's local history is never the complete ledger — authoritative occupancy and already-inside checks live in Aeria, not in partner-side state.
+- **Completeness:** every movement and every collection — including FASTag-collected fares and offline-period movements — must reach Aeria. The evidence may arrive by push (S9) or by retrieval (S10); what matters is that none is missing. Partial feeds undermine billing and analytics. The reverse also holds in dual-channel operation: movements can originate on the guard-app channel, so the partner's local history is never the complete ledger — authoritative occupancy and already-inside checks live in Aeria, not in partner-side state.
 - **Degradation envelope:** gate operation must not depend on Aeria's reachability **for synchronized traffic**: vehicles covered by entitlements (F1), prepaid bookings (F2), or a synced session status (S11 paid-upto) are decided locally by the partner, with S9 catch-up on reconnection. Unsynchronized traffic — walk-in pay-per-use visitors needing live fare computation — follows the site's configured offline policy (e.g., deny, or admit via local ticketing regularized through S9/S14 afterwards); full offline visitor operation is **not** implied by this document and, if a site requires it, is a scoped engagement addition (it needs tariff/state synchronization semantics beyond F1/F2).
 - **Vehicle identity:** the integration operates on the vehicle registration number alone — no other vehicle identifier is required by any step. How the plate is captured (LPR, manual entry by ground staff) is a site/partner concern.
 - **Gate identity:** every movement report carries the gate/barrier identity, and authorization requests carry it wherever the lane can supply it; Aeria's site configuration maps gate identities to checkpoints and collection points for gate-wise revenue attribution. Engagements enabling gate-wise attribution verify its presence during UAT.
