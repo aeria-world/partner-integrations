@@ -122,7 +122,7 @@ app.post('/api/call', async (req, res) => {
         partnerId,
         siteId,
         barrierId: barrierId || null,
-        barrierCode: body && !Array.isArray(body) ? body.barrierId || null : null,
+        barrierCode: Array.isArray(body) ? (body[0] && body[0].barrierId) || null : (body ? body.barrierId || null : null),
         direction: barrier ? barrier.direction : null,
         action,
         registrationNumber: extractReg(action, body),

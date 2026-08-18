@@ -241,6 +241,34 @@ pre.json {
 .spacer { flex: 1; }
 details summary { cursor: pointer; color: var(--accent); font-size: 12px; }
 
+/* ---------- live lane boxes (one per barrier code) ---------- */
+.barrier-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.lane-box {
+    background: #0b0d12;
+    color: #e8faf0;
+    border: 1px solid #000;
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-family: ui-monospace, Menlo, monospace;
+}
+.lane-box.selected { box-shadow: 0 0 0 2px var(--accent); }
+.lane-head { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.lane-head b { color: #e8faf0; }
+.lane-box input[type="radio"] { width: auto; cursor: pointer; }
+.lane-code { font-size: 28px; font-weight: 800; letter-spacing: 1px; margin: 8px 0 2px; }
+.lane-verdict { font-size: 12px; min-height: 18px; }
+.lane-box .boom-state { color: #cbd5e1; }
+.binfo { background: transparent; border: none; cursor: pointer; color: #9aa3b2; font-size: 16px; line-height: 1; padding: 2px 4px; }
+.binfo:hover { color: var(--accent); }
+.mini-boom { display: flex; align-items: center; gap: 10px; margin: 8px 0 6px; }
+.mini-boom .boom-arm-track { width: 120px; height: 26px; }
+.mini-boom .boom-arm { width: 120px; top: 9px; height: 7px; }
+
+/* ---------- modal ---------- */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+.modal { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; max-width: 760px; width: 100%; max-height: 82vh; overflow: auto; box-shadow: var(--shadow); }
+.modal pre.json { max-height: 64vh; }
+
 /* ---------- responsive ---------- */
 /* Wide content (tables) scrolls inside its card instead of pushing the page sideways. */
 .card { overflow-x: auto; }
