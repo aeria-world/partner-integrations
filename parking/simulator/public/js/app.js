@@ -27,11 +27,11 @@ const state = {
     partnerId: localStorage.getItem('partnerId') || null,
     siteId: localStorage.getItem('siteId') || null,
     barrierId: localStorage.getItem('barrierId') || null,
+    barrierCode: localStorage.getItem('barrierCode') || null,
     screen: 'partner',
     injection: 'none',
     lastResult: null,
-    boomTimers: [],
-    availSnaps: [], // last two category-availability snapshots for before/after deltas
+    boomTimers: {}, // per-barrier boom animation timers, keyed by barrierId
 };
 
 const db = () => state.db;
@@ -191,70 +191,95 @@ BINDERS.site = (root) => {
 // Each request type declares which input fields to render.
 const REQUESTS = {
     'category-availability': { label: 'Category availability', fields: [] },
-    'request-entry': { label: 'Request entry', fields: ['reg', 'vtype', 'code'] },
-    'request-exit': { label: 'Request exit', fields: ['reg', 'code'] },
-    'mlog-entry': { label: 'Movement log — entry', fields: ['reg', 'catinfo', 'code', 'time', 'collection'] },
-    'mlog-exit': { label: 'Movement log — exit', fields: ['reg', 'catinfo', 'code', 'time', 'collection'] },
-    'manual-exit': { label: 'Manual exit', fields: ['reg', 'remark', 'code'] },
+    'request-entry': { label: 'Request entry', fields: ['reg', 'vtype'] },
+    'request-exit': { label: 'Request exit', fields: ['reg'] },
+    'mlog-entry': { label: 'Movement log — entry', fields: ['reg', 'catinfo', 'time', 'collection'] },
+    'mlog-exit': { label: 'Movement log — exit', fields: ['reg', 'catinfo', 'time', 'collection'] },
+    'manual-exit': { label: 'Manual exit', fields: ['reg', 'remark'] },
 };
 
 SCREENS.console = () => {
     const bars = barriersForSite(state.siteId);
-    if (!bars.length) {
+    // One lane per (barrier, code).
+    const lanes = [];
+    bars.forEach((b) => (b.barrierCodes || []).forEach((code) => lanes.push({ b, code })));
+    if (!lanes.length) {
         return `<h1>Lane Console</h1>
-            <div class="empty">No barriers for this site yet. Add one in <a data-goto="config" style="color:var(--accent);cursor:pointer">Configuration</a>.</div>`;
+            <div class="empty">No barrier codes for this site yet. Add a barrier (with codes) in <a data-goto="config" style="color:var(--accent);cursor:pointer">Configuration</a>.</div>`;
     }
-    let b = barrier();
-    if (!b || b.siteId !== state.siteId) { b = bars[0]; setSel('barrierId', b.id); }
+    // Keep a valid selected lane (barrier + code).
+    let cur = lanes.find((l) => l.b.id === state.barrierId && l.code === state.barrierCode);
+    if (!cur) { cur = lanes[0]; setSel('barrierId', cur.b.id); setSel('barrierCode', cur.code); }
     const pay = (bindingFor(state.partnerId, state.siteId) || {}).paymentHandledBy || (partner().paymentHandledBy || 'aeria');
     return `
     <h1>Lane Console</h1>
-    <p class="sub">Payments: <b>${esc(pay)}</b> — ${pay === 'partner' ? 'collect at gate (Phase 2 flow)' : 'ms-parking collects online'}</p>
+    <p class="sub">Payments: <b>${esc(pay)}</b> — ${pay === 'partner' ? 'collect at gate (Phase 2 flow)' : 'ms-parking collects online'}. Each box is a lane (barrier code) — select one, pick a request type, fill the fields, and Send.</p>
     <div class="console">
         <div>
-            <div id="display" class="display idle">
-                <div class="verdict">READY</div>
-                <div class="line">Pick a request type, fill the fields, and Send.</div>
-            </div>
-            <div id="boom" class="card boom-CLOSED" style="margin-top:14px">
-                <div class="boom-wrap">
-                    <div class="boom-base"></div>
-                    <div class="boom-arm-track"><div class="boom-arm"></div></div>
-                    <div class="boom-state" id="boom-state">CLOSED</div>
-                </div>
-            </div>
-            <div class="card">
-                <h2 style="margin-top:0">Raw response</h2>
-                <pre class="json" id="rawout">—</pre>
-            </div>
+            <div class="barrier-grid">${lanes.map((l) => laneBoxHtml(l.b, l.code)).join('')}</div>
         </div>
         <div class="side">
             <div class="card">
-                <label>Barrier</label>
-                <select id="lc-barrier">${bars.map((x) => `<option value="${x.id}" ${x.id === b.id ? 'selected' : ''}>${esc(x.name)} (${x.direction})</option>`).join('')}</select>
+                <label>Barrier code — from the selected lane (read-only)</label>
+                <div class="inline"><input id="lc-code-display" readonly value="${esc(cur.code)}" style="opacity:.85;cursor:not-allowed;flex:1;min-width:0" /><span class="badge" id="lc-code-barrier">${esc(cur.b.name)}</span></div>
                 <label>Request type</label>
                 <select id="lc-req">${Object.entries(REQUESTS).map(([k, v]) => `<option value="${k}">${esc(v.label)}</option>`).join('')}</select>
-            </div>
-            <div class="card">
-                <div id="lc-fields"></div>
+                <div id="lc-fields" style="margin-top:4px"></div>
                 <div class="btnbar"><button class="btn primary" id="lc-send">Send request</button><button class="btn ghost" id="lc-force">Force open</button></div>
             </div>
             <div class="card">
                 <div class="inline"><h2 style="margin:0">Availability</h2><span class="spacer"></span><button class="btn sm" id="lc-avail-snap">Snapshot</button></div>
-                <div id="lc-avail" style="margin-top:10px"><div class="empty">No snapshot yet — Snapshot before/after an entry-exit to see the bay count change.</div></div>
+                <div id="lc-avail" style="margin-top:10px"><div class="empty">No snapshot yet — click Snapshot.</div></div>
             </div>
         </div>
     </div>`;
 };
+
+// Stable DOM-id key for a lane (getElementById tolerates any string).
+function laneKey(bid, code) { return bid + '__' + code; }
+
+// One live lane box per barrier code — a mini black lane screen.
+function laneBoxHtml(b, code) {
+    const key = laneKey(b.id, code);
+    const selected = state.barrierId === b.id && state.barrierCode === code;
+    const last = lastLogForLane(b.id, code);
+    const verdict = last
+        ? `<span class="result-tag tag-${last.result}">${VERDICT[last.result] || last.result}</span> <span style="opacity:.7">${esc(barrierDetailFromRes(logToRes(last)))}</span>`
+        : '<span style="opacity:.55">no calls yet</span>';
+    return `
+    <div class="lane-box ${selected ? 'selected' : ''}" data-key="${esc(key)}">
+        <div class="lane-head">
+            <input type="radio" name="lc-lane" data-bid="${esc(b.id)}" data-code="${esc(code)}" value="${esc(key)}" ${selected ? 'checked' : ''} />
+            <b>${esc(b.name)}</b>
+            <span class="badge ${b.direction}">${b.direction}</span>
+            <span class="spacer"></span>
+            <button class="binfo" data-bid="${esc(b.id)}" data-code="${esc(code)}" title="Last raw response">ⓘ</button>
+        </div>
+        <div class="lane-code">${esc(code)}</div>
+        <div class="mini-boom boom-CLOSED" id="boom-${esc(key)}">
+            <div class="boom-arm-track"><div class="boom-arm"></div></div>
+            <span class="boom-state" id="bs-${esc(key)}">CLOSED</span>
+        </div>
+        <div class="lane-verdict" id="verdict-${esc(key)}">${verdict}</div>
+    </div>`;
+}
 BINDERS.console = (root) => {
     const g = $('[data-goto]', root);
-    if (g) { g.addEventListener('click', () => go('config')); return; } // no-barriers empty state
-    const barSel = $('#lc-barrier', root);
-    barSel.addEventListener('change', () => { setSel('barrierId', barSel.value); renderReqFields(root); });
+    if (g) { g.addEventListener('click', () => go('config')); return; } // no-lanes empty state
+    // Radios pick the active lane (barrier + code).
+    $$('input[name="lc-lane"]', root).forEach((r) => r.addEventListener('change', () => {
+        setSel('barrierId', r.dataset.bid); setSel('barrierCode', r.dataset.code);
+        $$('.lane-box', root).forEach((box) => box.classList.toggle('selected', box.dataset.key === r.value));
+        // Mirror the selected lane's code into the read-only request-builder display.
+        const disp = $('#lc-code-display', root); if (disp) disp.value = r.dataset.code;
+        const bn = $('#lc-code-barrier', root); if (bn) { const bb = db().barriers.find((x) => x.id === r.dataset.bid); bn.textContent = bb ? bb.name : ''; }
+    }));
+    // Info icon → modal with that lane's last request/response.
+    $$('.binfo', root).forEach((b) => b.addEventListener('click', () => showLaneModal(b.dataset.bid, b.dataset.code)));
     $('#lc-req', root).addEventListener('change', () => renderReqFields(root));
     renderReqFields(root);
     $('#lc-send', root).addEventListener('click', () => onSend(root));
-    $('#lc-force', root).addEventListener('click', () => forceOpen(root));
+    $('#lc-force', root).addEventListener('click', () => forceOpen());
     const snap = $('#lc-avail-snap', root);
     if (snap) snap.addEventListener('click', () => snapAvailability(snap));
     renderAvail();
@@ -270,7 +295,6 @@ function reqFieldHtml(key, b) {
         }
         case 'catinfo': return `<label>Category (from request-entry) — read-only</label><div id="f-catinfo" style="padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel-2)">—</div>`;
         case 'vtype': return `<label>Vehicle type</label><select id="f-vtype"><option value="4w">4w</option><option value="2w">2w</option></select>`;
-        case 'code': return `<label>Barrier code</label><select id="f-code">${codes.map((c) => `<option>${esc(c)}</option>`).join('') || '<option value="">(none set)</option>'}</select>`;
         case 'remark': return `<label>Remark</label><input id="f-remark" placeholder="optional" />`;
         case 'time': return `<label>Movement time (ISO)</label>
             <div class="inline"><input id="f-time" style="flex:1;min-width:0" value="${new Date().toISOString()}" /><button type="button" class="btn sm" id="f-time-now">Now</button></div>`;
@@ -349,23 +373,18 @@ function renderAvail() {
         <div class="sub" style="margin-top:6px">updated ${fmtTime(row.updatedAt)} · auto-adjusts on entry/exit</div>`;
 }
 
-function driveBoom(result) {
-    state.boomTimers.forEach(clearTimeout);
-    state.boomTimers = [];
-    const boom = $('#boom'), lbl = $('#boom-state');
+// Animate one barrier box's boom. Only a fresh ALLOWED opens it; everything else stays DOWN.
+function driveBoom(barrierId, result) {
+    if (state.boomTimers[barrierId]) state.boomTimers[barrierId].forEach(clearTimeout);
+    state.boomTimers[barrierId] = [];
+    const boom = document.getElementById('boom-' + barrierId), lbl = document.getElementById('bs-' + barrierId);
     if (!boom) return;
-    const set = (s) => { boom.className = 'card boom-' + s; if (lbl) lbl.textContent = s; };
-    // Only a fresh ALLOWED opens the barrier. DENIED / PAYMENT_DUE / NETWORK_ERROR and
-    // ALREADY_REPORTED (208 already-inside/exited) keep it DOWN — an already-inside vehicle
-    // must not re-open the gate (and may still owe an uncollected payment).
+    const push = (fn, ms) => state.boomTimers[barrierId].push(setTimeout(fn, ms));
+    const set = (s) => { boom.className = 'mini-boom boom-' + s; if (lbl) lbl.textContent = s; };
     if (result === 'ALLOWED') {
-        set('OPENING');
-        state.boomTimers.push(setTimeout(() => set('OPENED'), 250));
-        state.boomTimers.push(setTimeout(() => set('CLOSING'), 6250));
-        state.boomTimers.push(setTimeout(() => set('CLOSED'), 6900));
+        set('OPENING'); push(() => set('OPENED'), 250); push(() => set('CLOSING'), 6250); push(() => set('CLOSED'), 6900);
     } else {
-        set('BLOCKED');
-        state.boomTimers.push(setTimeout(() => set('CLOSED'), 3000));
+        set('BLOCKED'); push(() => set('CLOSED'), 3000);
     }
 }
 
@@ -399,48 +418,62 @@ function errorMessage(res) {
     if (typeof b === 'string') return b;
     return b.message || '';
 }
-function updateDisplay(action, res) {
-    const d = $('#display');
-    if (!d) return;
+function lastLogForLane(bid, code) {
+    return [...db().barrierLogs].reverse().find((l) => l.barrierId === bid && l.barrierCode === code) || null;
+}
+function logToRes(log) {
+    return { result: log.result, status: log.response && log.response.status, response: log.response && log.response.body, error: log.error, latencyMs: log.latencyMs };
+}
+// A short one-line summary for a barrier box verdict.
+function barrierDetailFromRes(res) {
+    if (res.error) return res.error;
+    if (res.status >= 400) return errorMessage(res) || 'error';
+    const p = getPayload(res.response);
+    if (Array.isArray(p)) return `${p.length} log(s)`;
+    if (p && typeof p === 'object') {
+        if (p.categories) return `${p.categories.length} categories`;
+        if (p.category && p.category.name) {
+            let s = p.category.name;
+            if (typeof p.pendingCollectionAmount === 'number' && p.pendingCollectionAmount > 0) s += ` · ₹${p.pendingCollectionAmount} due`;
+            return s;
+        }
+        if (typeof p.amountToPay === 'number') return p.amountToPay > 0 ? `pay ₹${p.amountToPay}` : 'settled';
+    }
+    return 'OK';
+}
+// Update one lane box's verdict line after a call.
+function updateLaneBox(key, res) {
+    const el = document.getElementById('verdict-' + key);
+    if (!el) return;
     const outcome = res.result;
-    const payload = getPayload(res.response);
-    d.className = 'display ' + outcome;
-    const lines = [];
-    const reg = $('#f-reg') ? $('#f-reg').value : '';
-    if (payload && typeof payload === 'object') {
-        if (payload.bay && (payload.bay.name || payload.bay.location)) lines.push(`Bay: ${esc(payload.bay.name || '')} ${esc(payload.bay.location || '')}`);
-        if (payload.category && payload.category.name) lines.push(`Category: ${esc(payload.category.name)}`);
-        if (typeof payload.pendingCollectionAmount === 'number') lines.push(`Pending: ₹${payload.pendingCollectionAmount}`);
-        if (typeof payload.totalFare === 'number') lines.push(`Fare: ₹${payload.totalFare} (pre-collected ₹${payload.preCollectedFare ?? 0})`);
-        if (typeof payload.amountToPay === 'number') lines.push(`Amount to pay: ₹${payload.amountToPay}`);
-        if (payload.entryTime) lines.push(`Entry: ${fmtTime(payload.entryTime)}`);
-        if (payload.exitTime) lines.push(`Exit: ${fmtTime(payload.exitTime)}`);
-    }
-    if (res.error) lines.push('Error: ' + esc(res.error));
-    else if (res.status >= 400) {
-        const em = errorMessage(res);
-        if (em) lines.push('Message: ' + esc(em));
-    }
-    d.innerHTML = `
-        <div class="plate">${esc(reg || '—')}</div>
-        <div class="verdict">${VERDICT[outcome] || outcome}</div>
-        ${lines.map((l) => `<div class="line">${l}</div>`).join('')}
-        <div class="line" style="opacity:.6">HTTP ${res.status ?? '—'} · ${res.latencyMs}ms · <span class="result-tag tag-${outcome}">${outcome}</span></div>`;
-    $('#rawout').textContent = JSON.stringify(res.response ?? res.error, null, 2);
+    el.innerHTML = `<span class="result-tag tag-${outcome}">${VERDICT[outcome] || outcome}</span> <span style="opacity:.7">${esc(barrierDetailFromRes(res))} · ${res.latencyMs}ms</span>`;
+}
+// Modal showing a lane's most recent signed request + raw response.
+function showLaneModal(bid, code) {
+    const b = db().barriers.find((x) => x.id === bid);
+    const last = lastLogForLane(bid, code);
+    const content = last
+        ? JSON.stringify({ action: last.action, result: last.result, ts: last.ts, request: last.request, response: last.response, error: last.error }, null, 2)
+        : 'No calls yet for this lane.';
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `<div class="modal"><div class="inline"><h2 style="margin:0">${esc(b ? b.name : '')} · code ${esc(code)} — last raw response</h2><span class="spacer"></span><button class="btn sm" id="modal-close">Close</button></div><pre class="json" style="max-height:64vh;margin-top:10px">${esc(content)}</pre></div>`;
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+    const c = $('#modal-close', overlay); if (c) c.addEventListener('click', () => overlay.remove());
 }
 
-function forceOpen(root) {
-    driveBoom('ALLOWED');
-    const d = $('#display'); if (!d) return;
-    const reg = ($('#f-reg', root) && $('#f-reg', root).value) || '—';
-    d.className = 'display ALLOWED';
-    d.innerHTML = `<div class="plate">${esc(reg)}</div><div class="verdict">FORCE OPENED</div><div class="line">Manual guard override (not sent to ms-parking).</div>`;
+function forceOpen() {
+    if (!state.barrierId || !state.barrierCode) return;
+    const key = laneKey(state.barrierId, state.barrierCode);
+    driveBoom(key, 'ALLOWED');
+    const el = document.getElementById('verdict-' + key);
+    if (el) el.innerHTML = `<span class="result-tag tag-ALLOWED">FORCE OPENED</span> <span style="opacity:.7">manual override (not sent)</span>`;
 }
 
 async function onSend(root) {
     const type = $('#lc-req', root).value;
-    const b = barrier() || {};
-    const code = $('#f-code', root) ? $('#f-code', root).value : undefined;
+    const code = state.barrierCode; // the selected lane's barrier code
     const overrides = {};
     const reg = () => (($('#f-reg', root) && $('#f-reg', root).value) || '').trim();
     const buildCollection = () => {
@@ -504,9 +537,10 @@ async function onSend(root) {
     if (sendBtn) sendBtn.disabled = true;
     try {
         const res = await API.call({ partnerId: state.partnerId, siteId: state.siteId, barrierId: state.barrierId, action, body, overrides });
-        updateDisplay(action, res);
+        const key = laneKey(state.barrierId, state.barrierCode);
+        updateLaneBox(key, res);
         // Only the entry/exit APIs physically open the barrier.
-        if (action === 'request-entry' || action === 'request-exit') driveBoom(res.result);
+        if (action === 'request-entry' || action === 'request-exit') driveBoom(key, res.result);
         await refresh(true);
         renderAvail(); // reflect the ±1 availability adjustment / any occupancy change
     } catch (e) { toast(e.message, true); } finally { if (sendBtn) sendBtn.disabled = false; }
