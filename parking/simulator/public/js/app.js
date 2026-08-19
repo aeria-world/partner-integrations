@@ -315,6 +315,9 @@ function renderReqFields(root) {
     container.innerHTML = fields.length ? fields.map((k) => reqFieldHtml(k, b)).join('') : '<div class="empty" style="padding:8px">No fields — just Send.</div>';
     const nowBtn = $('#f-time-now', container);
     if (nowBtn) nowBtn.addEventListener('click', () => { const t = $('#f-time', container); if (t) t.value = new Date().toISOString(); });
+    // Track whether the operator manually edited the time (typing marks it "touched").
+    const timeEl = $('#f-time', container);
+    if (timeEl) timeEl.addEventListener('input', () => { timeEl.dataset.touched = '1'; });
     // Prepopulate the read-only category/unregistered block from the vehicle's saved entry/exit data.
     const regEl = $('#f-reg', container);
     const catInfo = $('#f-catinfo', container);
@@ -500,7 +503,10 @@ async function onSend(root) {
         if (!reg()) return toast('Enter a registration number', true);
         const cats = categoriesForSite(state.siteId);
         const collection = buildCollection();
-        const time = (($('#f-time', root) && $('#f-time', root).value) || '').trim() || new Date().toISOString();
+        // Default to NOW at send-time; only use the field value if the operator actually edited it.
+        const timeEl = $('#f-time', root);
+        const time = (timeEl && timeEl.dataset.touched === '1' && (timeEl.value || '').trim()) || new Date().toISOString();
+        if (timeEl && timeEl.dataset.touched !== '1') timeEl.value = time; // reflect what was sent
         // categoryId is required by the DTO but ignored by ms-parking on movement-logs; we still
         // send the REAL category from the matching request (entry/exit response) so it lines up.
         if (type === 'mlog-entry') {
