@@ -384,7 +384,8 @@ function driveBoom(barrierId, result) {
     if (!boom) return;
     const push = (fn, ms) => state.boomTimers[barrierId].push(setTimeout(fn, ms));
     const set = (s) => { boom.className = 'mini-boom boom-' + s; if (lbl) lbl.textContent = s; };
-    if (result === 'ALLOWED') {
+    // Lift on a clean allow AND on an already-reported-but-nothing-due (payment cleared) re-tap.
+    if (result === 'ALLOWED' || result === 'REPORTED_OK') {
         set('OPENING'); push(() => set('OPENED'), 250); push(() => set('CLOSING'), 6250); push(() => set('CLOSED'), 6900);
     } else {
         set('BLOCKED'); push(() => set('CLOSED'), 3000);
@@ -393,6 +394,7 @@ function driveBoom(barrierId, result) {
 
 const VERDICT = {
     ALLOWED: 'ALLOWED', DENIED: 'DENIED', PAYMENT_DUE: 'PAYMENT DUE',
+    REPORTED_OK: 'REPORTED', REPORTED_DUE: 'REPORTED · PAYMENT DUE',
     ALREADY_REPORTED: 'ALREADY REPORTED', NETWORK_ERROR: 'NO RESPONSE',
 };
 

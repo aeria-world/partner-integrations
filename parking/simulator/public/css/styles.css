@@ -215,7 +215,8 @@ td.mono, .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
 .result-tag { padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; }
 .tag-ALLOWED { background: var(--ok-bg); color: var(--ok); }
 .tag-DENIED, .tag-NETWORK_ERROR { background: var(--err-bg); color: var(--err); }
-.tag-PAYMENT_DUE { background: var(--warn-bg); color: var(--warn); }
+.tag-PAYMENT_DUE, .tag-REPORTED_DUE { background: var(--warn-bg); color: var(--warn); }
+.tag-REPORTED_OK { background: var(--ok-bg); color: var(--ok); }
 .tag-ALREADY_REPORTED { background: var(--info-bg); color: var(--info); }
 
 pre.json {

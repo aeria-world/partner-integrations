@@ -76,18 +76,25 @@ function payloadOf(body) {
     return body;
 }
 
-/** Classify a call outcome into a label the driver display / log can use. */
+/**
+ * Classify a call outcome into a label the UI uses (and which drives the barrier).
+ * For request-entry/exit, the OUTSTANDING amount decides — for BOTH 200 and 208:
+ *   - due == 0 → gate lifts   (200 → ALLOWED, 208 → REPORTED_OK)
+ *   - due  > 0 → gate stays down (200 → PAYMENT_DUE, 208 → REPORTED_DUE)
+ * (entry uses pendingCollectionAmount, exit uses amountToPay.)
+ */
 function classifyResult(action, status, response, error) {
     if (error) return 'NETWORK_ERROR';
-    if (status === 208) return 'ALREADY_REPORTED';
-    if (status >= 400 || status === null) return 'DENIED';
-    const d = payloadOf(response) || {};
-    // Money outstanding must keep the barrier down: entry uses pendingCollectionAmount, exit uses amountToPay.
-    const due = (typeof d.pendingCollectionAmount === 'number' ? d.pendingCollectionAmount : 0)
-        || (typeof d.amountToPay === 'number' ? d.amountToPay : 0);
-    if ((action === 'request-entry' || action === 'request-exit') && due > 0) {
-        return 'PAYMENT_DUE';
+    if (status === null || status >= 400) return 'DENIED';
+    const isEntryExit = action === 'request-entry' || action === 'request-exit';
+    if (isEntryExit && (status === 200 || status === 208)) {
+        const d = payloadOf(response) || {};
+        const due = (typeof d.pendingCollectionAmount === 'number' ? d.pendingCollectionAmount : 0)
+            || (typeof d.amountToPay === 'number' ? d.amountToPay : 0);
+        if (status === 208) return due > 0 ? 'REPORTED_DUE' : 'REPORTED_OK';
+        return due > 0 ? 'PAYMENT_DUE' : 'ALLOWED';
     }
+    if (status === 208) return 'ALREADY_REPORTED';
     return 'ALLOWED';
 }
 
