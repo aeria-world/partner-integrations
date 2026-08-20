@@ -21,6 +21,37 @@ function fmtTime(iso) {
     return isNaN(d) ? iso : d.toLocaleString();
 }
 
+// Inline copy glyph reused by every copy/curl button.
+const COPY_ICON = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+
+async function copyText(text, okMsg) {
+    try { await navigator.clipboard.writeText(text); toast(okMsg || 'Copied to clipboard'); }
+    catch (e) { toast('Copy failed: ' + e.message, true); }
+}
+
+// Escape a value for a single-quoted shell argument.
+const shq = (s) => String(s).replace(/'/g, `'\\''`);
+
+// Turn a stored log request ({ method, url, headers, body }) into a runnable curl.
+// POST bodies also emit Content-Type: application/json (the real call sent it, but the
+// stored headers keep only x-signature) so the copied command reproduces the request.
+function buildCurl(request) {
+    if (!request || !request.url) return '';
+    const method = request.method || 'GET';
+    const hasBody = request.body != null && request.body !== '';
+    const headers = { ...(request.headers || {}) };
+    if (hasBody && !Object.keys(headers).some((h) => h.toLowerCase() === 'content-type')) {
+        headers['Content-Type'] = 'application/json';
+    }
+    const parts = [`curl -X ${method} '${shq(request.url)}'`];
+    Object.entries(headers).forEach(([k, v]) => parts.push(`-H '${shq(k)}: ${shq(v)}'`));
+    if (hasBody) {
+        const data = typeof request.body === 'string' ? request.body : JSON.stringify(request.body);
+        parts.push(`-d '${shq(data)}'`);
+    }
+    return parts.join(' \\\n  ');
+}
+
 // ---------- state ----------
 const state = {
     db: null,
@@ -462,10 +493,17 @@ function showLaneModal(bid, code) {
         : 'No calls yet for this lane.';
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay.innerHTML = `<div class="modal"><div class="inline"><h2 style="margin:0">${esc(b ? b.name : '')} · code ${esc(code)} — last raw response</h2><span class="spacer"></span><button class="btn sm" id="modal-close">Close</button></div><pre class="json" style="max-height:64vh;margin-top:10px">${esc(content)}</pre></div>`;
+    const actions = last
+        ? `<button class="btn sm" id="modal-copy">${COPY_ICON} Copy</button><button class="btn sm" id="modal-curl">${COPY_ICON} Curl</button>`
+        : '';
+    overlay.innerHTML = `<div class="modal"><div class="inline"><h2 style="margin:0">${esc(b ? b.name : '')} · code ${esc(code)} — last raw response</h2><span class="spacer"></span>${actions}<button class="btn sm" id="modal-close">Close</button></div><pre class="json" style="max-height:64vh;margin-top:10px">${esc(content)}</pre></div>`;
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
     document.body.appendChild(overlay);
     const c = $('#modal-close', overlay); if (c) c.addEventListener('click', () => overlay.remove());
+    if (last) {
+        const cp = $('#modal-copy', overlay); if (cp) cp.addEventListener('click', () => copyText(content));
+        const cu = $('#modal-curl', overlay); if (cu) cu.addEventListener('click', () => copyText(buildCurl(last.request), 'curl copied to clipboard'));
+    }
 }
 
 function forceOpen() {
@@ -738,7 +776,8 @@ SCREENS.logs = () => {
                 <span class="pill">${l.latencyMs}ms</span>
                 ${l.injected ? `<span class="pill" style="color:var(--warn)">injected: ${esc(l.injected)}</span>` : ''}
                 <span class="pill">${fmtTime(l.ts)}</span>
-                <button class="btn sm" data-copy="${l.id}">Copy</button>
+                <button class="btn sm" data-copy="${l.id}">${COPY_ICON} Copy</button>
+                <button class="btn sm" data-curl="${l.id}">${COPY_ICON} Curl</button>
             </div>
             <details style="margin-top:8px"><summary>request / response</summary>
                 <pre class="json">${esc(JSON.stringify({ request: l.request, response: l.response, error: l.error }, null, 2))}</pre>
@@ -752,12 +791,15 @@ BINDERS.logs = (root) => {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob); a.download = 'barrier-logs.json'; a.click();
     });
-    $$('[data-copy]', root).forEach((btn) => btn.addEventListener('click', async () => {
+    $$('[data-copy]', root).forEach((btn) => btn.addEventListener('click', () => {
         const l = db().barrierLogs.find((x) => x.id === btn.dataset.copy);
         if (!l) return;
-        const text = JSON.stringify({ request: l.request, response: l.response, error: l.error }, null, 2);
-        try { await navigator.clipboard.writeText(text); toast('Copied to clipboard'); }
-        catch (e) { toast('Copy failed: ' + e.message, true); }
+        copyText(JSON.stringify({ request: l.request, response: l.response, error: l.error }, null, 2));
+    }));
+    $$('[data-curl]', root).forEach((btn) => btn.addEventListener('click', () => {
+        const l = db().barrierLogs.find((x) => x.id === btn.dataset.curl);
+        if (!l) return;
+        copyText(buildCurl(l.request), 'curl copied to clipboard');
     }));
 };
 
